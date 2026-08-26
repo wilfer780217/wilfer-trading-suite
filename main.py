@@ -20,7 +20,7 @@ activo_sel = st.selectbox("Símbolo del Activo", ["BTCUSD", "ETHUSD", "EURUSD"])
 tipo_operacion = st.radio("Dirección del Mercado", ["LONG (Compra Alcista)", "SHORT (Venta Bajista)"], horizontal=True)
 
 st.divider()
-st.subheader("📐 Planificación y Parámetros Manuales")
+st.subheader("📐 Planificación y Parámetros Manuales (Tus Niveles Exactos)")
 
 # Campos totalmente manuales para que pongas el precio exacto que quieras
 col_e1, col_e2 = st.columns(2)
@@ -30,24 +30,34 @@ with col_e1:
 with col_e2:
     tp_manual = st.number_input("Take Profit - TP ($)", value=68250.00, step=1.0, format="%.2f")
 
-# Cálculos de riesgo y lote basados en tus números exactos
+# Cálculos matemáticos exactos basados en tus inputs
 riesgo_dinero = capital * (riesgo_usr_pct / 100.0)
 riesgo_unitario = abs(precio_manual - sl_manual)
 lote_posicion = riesgo_dinero / riesgo_unitario if riesgo_unitario > 0 else 0.0
 
 if "LONG" in tipo_operacion:
     ganancia_proyectada = lote_posicion * abs(tp_manual - precio_manual)
+    rr_actual = abs(tp_manual - precio_manual) / riesgo_unitario if riesgo_unitario > 0 else 0.0
 else:
     ganancia_proyectada = lote_posicion * abs(precio_manual - tp_manual)
+    rr_actual = abs(precio_manual - tp_manual) / riesgo_unitario if riesgo_unitario > 0 else 0.0
 
 st.divider()
-st.subheader("🎯 Resumen de Ejecución y Lotes")
 
+# --- PANEL DE NIVELES EXACTOS (EL ASISTENTE TÉCNICO PRECISO) ---
+st.subheader("🎯 Panel de Control y Niveles Exactos (Bot v6.64)")
+
+col_n1, col_n2, col_n3 = st.columns(3)
+col_n1.metric("Puntos de Riesgo (SL)", f"{riesgo_unitario:,.2f} USD")
+col_n2.metric("Ratio Beneficio/Riesgo (R:R)", f"1 : {rr_actual:.2f}")
+col_n3.metric("Ganancia Proyectada (TP)", f"${ganancia_proyectada:,.2f} USD")
+
+st.markdown("---")
+
+# Métricas de Ejecución Final
 m1, m2 = st.columns(2)
 m1.metric("Riesgo Máximo en Dinero", f"${riesgo_dinero:,.2f} USD")
-m2.metric("Lote / Tamaño de Posición", f"{lote_posicion:.4f} unidades")
-
-st.metric("Ganancia Proyectada Estimada", f"${ganancia_proyectada:,.2f} USD")
+m2.metric("Lote / Tamaño de Posición Exacto", f"{lote_posicion:.4f} unidades")
 
 # Bitácora
 if st.button("💾 Guardar Operación en Bitácora", use_container_width=True):
@@ -71,7 +81,8 @@ mensaje_senal = (
     f"🛑 *Stop Loss:* {sl_manual:,.2f}\n"
     f"🏆 *Take Profit:* {tp_manual:,.2f}\n"
     f"💵 *Riesgo Máximo:* ${riesgo_dinero:,.2f} USD\n"
-    f"⚖️ *Lote / Posición:* {lote_posicion:.4f} unidades"
+    f"⚖️ *Lote / Posición:* {lote_posicion:.4f} unidades\n"
+    f"📊 *R:R:* 1:{rr_actual:.2f}"
 )
 msg_encoded = urllib.parse.quote(mensaje_senal)
 link_wa = f"https://api.whatsapp.com/send?text={msg_encoded}"
@@ -83,19 +94,6 @@ with col_w:
     st.markdown(f'<a href="{link_wa}" target="_blank" style="text-decoration:none;"><button style="width:100%;background-color:#25D366;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">📲 WhatsApp</button></a>', unsafe_allow_html=True)
 with col_t:
     st.markdown(f'<a href="{link_tg}" target="_blank" style="text-decoration:none;"><button style="width:100%;background-color:#0088cc;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">✈️ Telegram</button></a>', unsafe_allow_html=True)
-
-st.divider()
-
-# --- ASISTENTE TÉCNICO INTEGRADO (Basado en tu Bot v6.64) ---
-st.subheader("🤖 Asistente Técnico Wilfer Pro (Bot v6.64)")
-with st.container():
-    st.info(f"""
-    **Diagnóstico del Asistente para {activo_sel}:**
-    * **Filtro ADX (Tendencia / Ruido):** Se requiere un ADX $\\ge 25.0$ para validar mercado con fuerza.
-    * **Estructura y Niveles:** Monitoreando quiebres estructurales (**BOS** / **CHoCH**) y zonas de retroceso **Fibonacci (50% y 61.8%)**.
-    * **Gestión de Riesgo Activa:** Relación beneficio/riesgo configurada en $2.5$ con multiplicador ATR de $3.0$.
-    * **Validación de Posición:** Distancia actual al Stop Loss de `${abs(precio_manual - sl_manual):,.2f}` con un lote asignado de `{lote_posicion:.4f}` unidades bajo tu control estricto de riesgo del `{riesgo_usr_pct}%`.
-    """)
 
 st.divider()
 
