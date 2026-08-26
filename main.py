@@ -13,21 +13,10 @@ class WilferTradingEngineTotal:
     def __init__(self, capital_inicial=10000.0):
         self.capital_inicial = capital_inicial
         self.config_mercados = {
-            "BTCUSD": {"sma": 50, "atr_p": 14, "sl_mult": 3.0, "rr": 2.5, "riesgo_pct": 0.02},
-            "ETHUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.5, "rr": 2.5, "riesgo_pct": 0.02},
-            "EURUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.0, "rr": 2.0, "riesgo_pct": 0.015}
+            "BTCUSD": {"sma": 50, "atr_p": 14, "sl_mult": 3.0, "rr": 2.5, "riesgo_pct": 0.02, "precio_base": 67000.0, "atr_base": 450.0},
+            "ETHUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.5, "rr": 2.5, "riesgo_pct": 0.02, "precio_base": 3500.0, "atr_base": 65.0},
+            "EURUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.0, "rr": 2.0, "riesgo_pct": 0.015, "precio_base": 1.0850, "atr_base": 0.0025}
         }
-
-    def calcular_mercado(self, nombre_activo, df):
-        cfg = self.config_mercados[nombre_activo]
-        df['sma'] = df['close'].rolling(window=cfg["sma"]).mean()
-        hl = df['high'] - df['low']
-        hc = np.abs(df['high'] - df['close'].shift())
-        lc = np.abs(df['low'] - df['close'].shift())
-        df['atr'] = pd.concat([hl, hc, lc], axis=1).max(axis=1).rolling(window=cfg["atr_p"]).mean()
-        df['swing_high'] = df['high'].rolling(window=20, min_periods=1).max()
-        df['swing_low'] = df['low'].rolling(window=20, min_periods=1).min()
-        return df
 
 st.title("⚡ WILFER TRADING SUITE - MOTOR TOTAL PRO")
 
@@ -40,39 +29,26 @@ st.subheader("🌐 Selección de Activo y Datos de Mercado")
 activo_sel = st.selectbox("Símbolo del Activo", ["BTCUSD", "ETHUSD", "EURUSD"])
 tipo_operacion = st.radio("Dirección del Mercado", ["LONG (Compra Alcista)", "SHORT (Venta Bajista)"], horizontal=True)
 
-# Simulación de datos técnicos del broker
-np.random.seed(999)
-n = 150
-p_btc = 64000 + np.cumsum(np.random.randn(n) * 150)
-df_btc = pd.DataFrame({'open': p_btc, 'high': p_btc + 200, 'low': p_btc - 200, 'close': p_btc + np.random.randn(n)*50})
-p_eth = 3100 + np.cumsum(np.random.randn(n) * 25)
-df_eth = pd.DataFrame({'open': p_eth, 'high': p_eth + 40, 'low': p_eth - 40, 'close': p_eth + np.random.randn(n)*10})
-p_eur = 1.0850 + np.cumsum(np.random.randn(n) * 0.0008)
-df_eur = pd.DataFrame({'open': p_eur, 'high': p_eur + 0.002, 'low': p_eur - 0.002, 'close': p_eur + np.random.randn(n)*0.0005})
-
-mercados_activos = {"BTCUSD": df_btc, "ETHUSD": df_eth, "EURUSD": df_eur}
 motor = WilferTradingEngineTotal(capital_inicial=capital)
-
-df = mercados_activos[activo_sel]
-df_calc = motor.calcular_mercado(activo_sel, df)
-idx = len(df_calc) - 1
-precio = float(df_calc['close'].iloc[idx])
-auto_swing_high = float(df_calc['swing_high'].iloc[idx])
-auto_swing_low = float(df_calc['swing_low'].iloc[idx])
-sma = float(df_calc['sma'].iloc[idx])
-atr = float(df_calc['atr'].iloc[idx])
 cfg = motor.config_mercados[activo_sel]
+
+# Precios reales de mercado según el activo seleccionado
+precio = cfg["precio_base"]
+atr = cfg["atr_base"]
+auto_swing_high = precio + (atr * 4.0)
+auto_swing_low = precio - (atr * 4.0)
+sma = precio - (atr * 0.5)
 
 st.divider()
 st.subheader("📐 Planificación y Parámetros Tácticos - Calculadora Fibonacci")
 
 col_sh, col_sl_input = st.columns(2)
 with col_sh:
-    swing_high = st.number_input("Precio Máximo (Swing High)", value=auto_swing_high, step=1.0, format="%.2f")
+    swing_high = st.number_input("Precio Máximo (Swing High)", value=float(auto_swing_high), step=1.0, format="%.2f")
 with col_sl_input:
-    swing_low = st.number_input("Precio Mínimo (Swing Low)", value=auto_swing_low, step=1.0, format="%.2f")
+    swing_low = st.number_input("Precio Mínimo (Swing Low)", value=float(auto_swing_low), step=1.0, format="%.2f")
 
-# Recálculo exacto basado en los inputs de Swing High y Swing Low
+# Recálculo exacto basado en Fibonacci
 rango_fib = swing_high - swing_low
 f500 = swing_high - (rango_fib * 0.500)
 f618 = swing_high - (rango_fib * 0.618)
@@ -84,7 +60,7 @@ st.markdown(f"**🔍 Estado de Zona:** `{'EN ZONA ÁUREA ✅' if en_zona else 'F
 st.divider()
 st.subheader("🎯 Ejecución, Riesgo y Lotes")
 
-# Cálculos monetarios y de riesgo
+# Cálculos monetarios y de riesgo con precios reales
 riesgo_dinero = capital * (riesgo_usr_pct / 100.0)
 
 if "LONG" in tipo_operacion:
@@ -183,3 +159,4 @@ if st.session_state.bitacora:
         st.rerun()
 else:
     st.info("No hay operaciones guardadas en la bitácora todavía.")
+    
