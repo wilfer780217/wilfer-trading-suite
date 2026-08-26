@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 import urllib.parse
 
-st.set_page_config(page_title="Wilfer Trading Suite Pro", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Wilfer Trading Suite - Total Pro", layout="wide", page_icon="⚡")
 
 if "bitacora" not in st.session_state:
     st.session_state.bitacora = []
 
 class WilferTradingEngineTotal:
-    def __init__(self, capital_inicial=1000.0):
+    def __init__(self, capital_inicial=10000.0):
         self.capital_inicial = capital_inicial
         self.config_mercados = {
             "BTCUSD": {"sma": 50, "atr_p": 14, "sl_mult": 3.0, "rr": 2.5, "riesgo_pct": 0.02},
@@ -32,15 +32,18 @@ class WilferTradingEngineTotal:
         df['fib_618'] = df['swing_high'] - (rango_fib * 0.618)
         return df
 
-st.title("⚡ WILFER TRADING SUITE - TOTAL PRO")
+st.title("⚡ WILFER TRADING SUITE - MOTOR TOTAL PRO")
 
-# 1. Selector de Activo General para todo
-activo_sel = st.selectbox("🌐 Seleccionar Activo a Operar", ["BTCUSD", "ETHUSD", "EURUSD"])
+# --- PANEL DE CONFIGURACIÓN Y SELECCIÓN ---
+st.sidebar.header("⚙️ Configuración del Broker")
+capital = st.sidebar.number_input("Capital Total de la Cuenta ($)", value=10000.0, step=500.0)
+riesgo_usr_pct = st.sidebar.slider("Riesgo por Operación (%)", min_value=0.1, max_value=5.0, value=2.0, step=0.1)
 
-st.sidebar.header("⚙️ Configuración Cuenta")
-capital = st.sidebar.number_input("Capital Inicial ($)", value=10000.0, step=500.0)
+st.subheader("🌐 Selección de Activo y Datos de Mercado")
+activo_sel = st.selectbox("Símbolo del Activo", ["BTCUSD", "ETHUSD", "EURUSD"])
+tipo_operacion = st.radio("Dirección del Mercado", ["LONG (Compra Alcista)", "SHORT (Venta Bajista)"], horizontal=True)
 
-# Simulación de datos
+# Simulación de datos técnicos del broker
 np.random.seed(999)
 n = 150
 p_btc = 64000 + np.cumsum(np.random.randn(n) * 150)
@@ -57,70 +60,96 @@ df = mercados_activos[activo_sel]
 df_calc = motor.calcular_mercado(activo_sel, df)
 idx = len(df_calc) - 1
 precio = df_calc['close'].iloc[idx]
+swing_high = df_calc['swing_high'].iloc[idx]
+swing_low = df_calc['swing_low'].iloc[idx]
 f500 = df_calc['fib_500'].iloc[idx]
 f618 = df_calc['fib_618'].iloc[idx]
 sma = df_calc['sma'].iloc[idx]
 atr = df_calc['atr'].iloc[idx]
 cfg = motor.config_mercados[activo_sel]
+
 en_zona = (precio <= f500) and (precio >= f618)
-es_alcista = precio > sma
 
 st.divider()
-st.subheader(f"📊 Análisis Técnico: {activo_sel}")
+st.subheader("📊 Panel de Riesgo y Calculadora Fibonacci")
 
+# Cálculos monetarios y de riesgo
+riesgo_dinero = capital * (riesgo_usr_pct / 100.0)
+
+if "LONG" in tipo_operacion:
+    sl = precio - (atr * cfg["sl_mult"])
+    riesgo_unitario = precio - sl
+    tp = precio + (riesgo_unitario * cfg["rr"])
+else:
+    sl = precio + (atr * cfg["sl_mult"])
+    riesgo_unitario = sl - precio
+    tp = precio - (riesgo_unitario * cfg["rr"])
+
+lote_posicion = riesgo_dinero / riesgo_unitario if riesgo_unitario > 0 else 0.0
+ganancia_proyectada = lote_posicion * (tp - precio if "LONG" in tipo_operacion else precio - tp)
+
+# Métricas visuales detalladas
 c1, c2 = st.columns(2)
-c1.metric("Precio Actual", f"{precio:.5f}")
-c2.metric(f"Tendencia (SMA {cfg['sma']})", f"{sma:.5f}")
+c1.metric("Riesgo Máximo en Dinero", f"${riesgo_dinero:,.2f} USD")
+c2.metric("Lote / Tamaño de Posición", f"{lote_posicion:.4f} unidades")
 
 c3, c4 = st.columns(2)
-c3.metric("Volatilidad (ATR)", f"{atr:.5f}")
-c4.metric("Rango Fib (61.8% - 50%)", f"[{f618:.4f} - {f500:.4f}]")
+c3.metric("Precio Máximo Swing", f"{swing_high:,.5f}")
+c4.metric("Precio Mínimo Swing", f"{swing_low:,.5f}")
 
-if en_zona:
-    tipo = "LONG (COMPRA)" if es_alcista else "SHORT (VENTA)"
-    if es_alcista:
-        sl = precio - (atr * cfg["sl_mult"])
-        riesgo_u = precio - sl
-        tp = precio + (riesgo_u * cfg["rr"])
-    else:
-        sl = precio + (atr * cfg["sl_mult"])
-        riesgo_u = sl - precio
-        tp = precio - (riesgo_u * cfg["rr"])
-    
-    riesgo_dinero = motor.capital_inicial * cfg["riesgo_pct"]
-    ganancia_esp = riesgo_dinero * cfg["rr"]
-    
-    st.success(f"🚨 ¡SEÑAL CONFIRMADA: {tipo}!")
-    
-    m1, m2 = st.columns(2)
-    m1.metric("Entrada Exacta", f"{precio:.5f}")
-    m1.metric("Stop Loss (SL)", f"{sl:.5f}")
-    m2.metric("Take Profit (TP)", f"{tp:.5f}")
-    m2.metric("Ganancia Est.", f"${ganancia_esp:,.2f}")
+st.markdown(f"**📐 Zona Áurea Fibonacci (61.8% - 50%):** `[{f618:,.5f}  ---  {f500:,.5f}]`")
+st.markdown(f"**🔍 Estado de Zona:** `{'EN ZONA ÁUREA ✅' if en_zona else 'FUERA DE ZONA ⏳ (Esperando retroceso)'}`")
 
-    if st.button("💾 Guardar en Bitácora", use_container_width=True):
-        st.session_state.bitacora.append({
-            "Activo": activo_sel, "Tipo": tipo, "Entrada": f"{precio:.5f}", 
-            "SL": f"{sl:.5f}", "TP": f"{tp:.5f}", "Ganancia": f"${ganancia_esp:.2f}"
-        })
-        st.success("¡Guardado en la bitácora!")
+st.divider()
+st.subheader("🎯 Ejecución, Ganancias y Alertas")
 
-    msg = f"🚨 SEÑAL WILFER TRADING 🚨\nActivo: {activo_sel}\nTipo: {tipo}\nEntrada: {precio:.5f}\nSL: {sl:.5f}\nTP: {tp:.5f}\nGanancia Est: ${ganancia_esp:.2f}"
-    enc = urllib.parse.quote(msg)
-    
-    col_w, col_t = st.columns(2)
-    with col_w:
-        st.markdown(f'<a href="https://api.whatsapp.com/send?text={enc}" target="_blank"><button style="width:100%;background:#25D366;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">📲 WhatsApp</button></a>', unsafe_allow_html=True)
-    with col_t:
-        st.markdown(f'<a href="https://t.me/share/url?url=&text={enc}" target="_blank"><button style="width:100%;background:#0088cc;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">✈️ Telegram</button></a>', unsafe_allow_html=True)
-else:
-    st.info("⏳ [ESTADO]: Fuera de zona áurea. Esperando retroceso matemático...")
+m1, m2 = st.columns(2)
+m1.metric("Precio de Entrada", f"{precio:,.5f}")
+m1.metric("Stop Loss (SL)", f"{sl:,.5f}")
+m2.metric("Take Profit (TP)", f"{tp:,.5f}")
+m2.metric("Ganancia Proyectada", f"${ganancia_proyectada:,.2f} USD", delta=f"R:R 1:{cfg['rr']}")
+
+# Bitácora
+if st.button("💾 Guardar Operación en Bitácora", use_container_width=True):
+    st.session_state.bitacora.append({
+        "Símbolo": activo_sel,
+        "Dirección": tipo_operacion.split()[0],
+        "Entrada": f"{precio:.5f}",
+        "SL": f"{sl:.5f}",
+        "TP": f"{tp:.5f}",
+        "Riesgo ($)": f"${riesgo_dinero:.2f}",
+        "Ganancia ($)": f"${ganancia_proyectada:.2f}"
+    })
+    st.success("¡Operación registrada correctamente en la bitácora!")
+
+# Botones de compartir señal operativa
+mensaje_senal = (
+    f"🚨 *WILFER TRADING SUITE - SEÑAL* 🚨\n\n"
+    f"📌 *Símbolo:* {activo_sel}\n"
+    f"📈 *Dirección:* {tipo_operacion}\n"
+    f"🎯 *Entrada:* {precio:,.5f}\n"
+    f"🛑 *Stop Loss:* {sl:,.5f}\n"
+    f"🏆 *Take Profit:* {tp:,.5f}\n"
+    f"💵 *Riesgo Máximo:* ${riesgo_dinero:,.2f} USD\n"
+    f"💰 *Ganancia Proyectada:* ${ganancia_proyectada:,.2f} USD\n"
+    f"⚖️ *Lote / Posición:* {lote_posicion:.4f}"
+)
+msg_encoded = urllib.parse.quote(mensaje_senal)
+link_wa = f"https://api.whatsapp.com/send?text={msg_encoded}"
+link_tg = f"https://t.me/share/url?url=&text={msg_encoded}"
+
+st.markdown("##### 📲 Compartir Señal Operativa:")
+col_w, col_t = st.columns(2)
+with col_w:
+    st.markdown(f'<a href="{link_wa}" target="_blank" style="text-decoration:none;"><button style="width:100%;background-color:#25D366;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">📲 WhatsApp</button></a>', unsafe_allow_html=True)
+with col_t:
+    st.markdown(f'<a href="{link_tg}" target="_blank" style="text-decoration:none;"><button style="width:100%;background-color:#0088cc;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">✈️ Telegram</button></a>', unsafe_allow_html=True)
 
 st.divider()
 
-# 2. Gráfico TradingView visible de inmediato abajo
-st.subheader(f"📈 Gráfico Profesional: {activo_sel}")
-ticker = f"BINANCE:{activo_sel}T" if activo_sel in ["BTCUSD", "ETHUSD"] else f"FOREXCOM:{activo_sel}"
+# --- GRÁFICO TRADINGVIEW EN VIVO ---
+st.subheader(f"📈 Gráfico Profesional en Vivo: {activo_sel}")
+ticker_tv = f"BINANCE:{activo_sel}T" if activo_sel in ["BTCUSD", "ETHUSD"] else f"FOREXCOM:{activo_sel}"
 
 widget_tv = f"""
 <div style="height:500px;width:100%">
@@ -128,9 +157,17 @@ widget_tv = f"""
   <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
   <script type="text/javascript">
   new TradingView.widget({{
-    "autosize": true, "symbol": "{ticker}", "interval": "D",
-    "timezone": "Etc/UTC", "theme": "dark", "style": "1",
-    "locale": "es", "toolbar_bg": "#f1f3f6", "container_id": "tv_chart"
+    "autosize": true,
+    "symbol": "{ticker_tv}",
+    "interval": "D",
+    "timezone": "Etc/UTC",
+    "theme": "dark",
+    "style": "1",
+    "locale": "es",
+    "toolbar_bg": "#f1f3f6",
+    "enable_publishing": false,
+    "allow_symbol_change": true,
+    "container_id": "tv_chart"
   }});
   </script>
 </div>
@@ -139,12 +176,12 @@ components.html(widget_tv, height=510)
 
 st.divider()
 
-# 3. Bitácora visible abajo del todo
-st.subheader("📖 Bitácora de Operaciones Guardadas")
+# --- BITÁCORA GENERAL ---
+st.subheader("📖 Bitácora e Historial Operativo")
 if st.session_state.bitacora:
     st.dataframe(pd.DataFrame(st.session_state.bitacora), use_container_width=True)
-    if st.button("🗑️ Limpiar Bitácora"):
+    if st.button("🗑️ Limpiar Historial de Bitácora"):
         st.session_state.bitacora = []
         st.rerun()
 else:
-    st.info("La bitácora está vacía por ahora.")
+    st.info("No hay operaciones guardadas en la bitácora todavía.")
