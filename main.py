@@ -1,6 +1,7 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Wilfer Trading Suite Total", layout="wide", page_icon="📊")
 
@@ -8,9 +9,9 @@ class WilferTradingEngineTotal:
     def __init__(self, capital_inicial=1000.0):
         self.capital_inicial = capital_inicial
         self.config_mercados = {
-            "BTCUSD": {"sma": 50, "atr_p": 14, "sl_mult": 3.0, "rr": 2.5, "riesgo_pct": 0.02},
-            "ETHUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.5, "rr": 2.5, "riesgo_pct": 0.02},
-            "EURUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.0, "rr": 2.0, "riesgo_pct": 0.015}
+            "BTCUSD": {"sma": 50, "atr_p": 14, "sl_mult": 3.0, "rr": 2.5, "riesgo_pct": 0.02, "tv_symbol": "BINANCE:BTCUSDT"},
+            "ETHUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.5, "rr": 2.5, "riesgo_pct": 0.02, "tv_symbol": "BINANCE:ETHUSDT"},
+            "EURUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.0, "rr": 2.0, "riesgo_pct": 0.015, "tv_symbol": "FX:EURUSD"}
         }
 
     def calcular_mercado(self, nombre_activo, df):
@@ -87,11 +88,30 @@ for tab, (activo, df) in zip(tabs, mercados_activos.items()):
         else:
             st.info("⏳ [ESTADO]: Fuera de zona áurea. Esperando retroceso matemático...")
 
-        st.subheader(f"📈 Gráfico Técnico - {activo}")
-        df_grafico = df_calc[['close', 'sma', 'fib_500', 'fib_618']].rename(columns={
-            'close': 'Precio Cierre',
-            'sma': f'SMA {cfg["sma"]}',
-            'fib_500': 'Fib 50.0%',
-            'fib_618': 'Fib 61.8%'
-        })
-        st.line_chart(df_grafico)
+        st.subheader(f"📈 Gráfico Real de TradingView - {activo}")
+        tv_symbol = cfg["tv_symbol"]
+        tradingview_html = f'''
+        <div class="tradingview-widget-container" style="height:500px;width:100%;">
+          <div id="tradingview_{activo}" style="height:calc(100% - 32px);width:100%;"></div>
+          <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+          <script type="text/javascript">
+          new TradingView.widget(
+          {{
+          "autosize": true,
+          "symbol": "{tv_symbol}",
+          "interval": "60",
+          "timezone": "Etc/UTC",
+          "theme": "dark",
+          "style": "1",
+          "locale": "es",
+          "toolbar_bg": "#f1f3f6",
+          "enable_publishing": false,
+          "hide_top_toolbar": false,
+          "save_image": false,
+          "container_id": "tradingview_{activo}"
+        }}
+          );
+          </script>
+        </div>
+        '''
+        components.html(tradingview_html, height=500)
