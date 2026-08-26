@@ -1,7 +1,6 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 
 st.set_page_config(page_title="Wilfer Trading Suite Total", layout="wide", page_icon="📊")
 
@@ -88,22 +87,11 @@ for tab, (activo, df) in zip(tabs, mercados_activos.items()):
         else:
             st.info("⏳ [ESTADO]: Fuera de zona áurea. Esperando retroceso matemático...")
 
-        # Gráfico interactivo con Velas, SMA y Fibonacci
-        fig = go.Figure()
-        fig.add_trace(go.Candlestick(
-            x=df_calc.index, open=df_calc['open'], high=df_calc['high'],
-            low=df_calc['low'], close=df_calc['close'], name="Precio"
-        ))
-        fig.add_trace(go.Scatter(x=df_calc.index, y=df_calc['sma'], mode='lines', name=f"SMA {cfg['sma']}", line=dict(color='orange', width=2)))
-        fig.add_trace(go.Scatter(x=df_calc.index, y=df_calc['fib_500'], mode='lines', name="Fib 50%", line=dict(color='blue', dash='dash')))
-        fig.add_trace(go.Scatter(x=df_calc.index, y=df_calc['fib_618'], mode='lines', name="Fib 61.8%", line=dict(color='purple', dash='dash')))
-        
-        fig.update_layout(
-            title=f"Gráfico Interactivo de Velas y Niveles - {activo}",
-            yaxis_title="Precio",
-            xaxis_title="Velas",
-            template="plotly_dark",
-            xaxis_rangeslider_visible=False,
-            height=500
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        st.subheader(f"📈 Gráfico Técnico - {activo}")
+        df_grafico = df_calc[['close', 'sma', 'fib_500', 'fib_618']].rename(columns={
+            'close': 'Precio Cierre',
+            'sma': f'SMA {cfg["sma"]}',
+            'fib_500': 'Fib 50.0%',
+            'fib_618': 'Fib 61.8%'
+        })
+        st.line_chart(df_grafico)
