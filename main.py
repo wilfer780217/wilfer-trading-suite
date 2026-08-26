@@ -27,16 +27,13 @@ class WilferTradingEngineTotal:
         df['atr'] = pd.concat([hl, hc, lc], axis=1).max(axis=1).rolling(window=cfg["atr_p"]).mean()
         df['swing_high'] = df['high'].rolling(window=20, min_periods=1).max()
         df['swing_low'] = df['low'].rolling(window=20, min_periods=1).min()
-        rango_fib = df['swing_high'] - df['swing_low']
-        df['fib_500'] = df['swing_high'] - (rango_fib * 0.500)
-        df['fib_618'] = df['swing_high'] - (rango_fib * 0.618)
         return df
 
 st.title("⚡ WILFER TRADING SUITE - MOTOR TOTAL PRO")
 
 # --- PANEL DE CONFIGURACIÓN Y SELECCIÓN ---
 st.sidebar.header("⚙️ Configuración del Broker")
-capital = st.sidebar.number_input("Capital Total de la Cuenta ($)", value=10000.0, step=500.0)
+capital = st.sidebar.number_input("Capital Total de la Cuenta ($)", value=10000.0, step=500.0, format="%.2f")
 riesgo_usr_pct = st.sidebar.slider("Riesgo por Operación (%)", min_value=0.1, max_value=5.0, value=2.0, step=0.1)
 
 st.subheader("🌐 Selección de Activo y Datos de Mercado")
@@ -59,19 +56,33 @@ motor = WilferTradingEngineTotal(capital_inicial=capital)
 df = mercados_activos[activo_sel]
 df_calc = motor.calcular_mercado(activo_sel, df)
 idx = len(df_calc) - 1
-precio = df_calc['close'].iloc[idx]
-swing_high = df_calc['swing_high'].iloc[idx]
-swing_low = df_calc['swing_low'].iloc[idx]
-f500 = df_calc['fib_500'].iloc[idx]
-f618 = df_calc['fib_618'].iloc[idx]
-sma = df_calc['sma'].iloc[idx]
-atr = df_calc['atr'].iloc[idx]
+precio = float(df_calc['close'].iloc[idx])
+auto_swing_high = float(df_calc['swing_high'].iloc[idx])
+auto_swing_low = float(df_calc['swing_low'].iloc[idx])
+sma = float(df_calc['sma'].iloc[idx])
+atr = float(df_calc['atr'].iloc[idx])
 cfg = motor.config_mercados[activo_sel]
 
+st.divider()
+st.subheader("📐 Planificación y Parámetros Tácticos - Calculadora Fibonacci")
+
+col_sh, col_sl_input = st.columns(2)
+with col_sh:
+    swing_high = st.number_input("Precio Máximo (Swing High)", value=auto_swing_high, step=1.0, format="%.2f")
+with col_sl_input:
+    swing_low = st.number_input("Precio Mínimo (Swing Low)", value=auto_swing_low, step=1.0, format="%.2f")
+
+# Recálculo exacto basado en los inputs de Swing High y Swing Low
+rango_fib = swing_high - swing_low
+f500 = swing_high - (rango_fib * 0.500)
+f618 = swing_high - (rango_fib * 0.618)
 en_zona = (precio <= f500) and (precio >= f618)
 
+st.markdown(f"🎯 **Zona Áurea (61.8% Fib):** `${f618:,.2f}` | **50% Fib:** `${f500:,.2f}`")
+st.markdown(f"**🔍 Estado de Zona:** `{'EN ZONA ÁUREA ✅' if en_zona else 'FUERA DE ZONA ⏳ (Esperando retroceso)'}`")
+
 st.divider()
-st.subheader("📊 Panel de Riesgo y Calculadora Fibonacci")
+st.subheader("🎯 Ejecución, Riesgo y Lotes")
 
 # Cálculos monetarios y de riesgo
 riesgo_dinero = capital * (riesgo_usr_pct / 100.0)
@@ -88,35 +99,22 @@ else:
 lote_posicion = riesgo_dinero / riesgo_unitario if riesgo_unitario > 0 else 0.0
 ganancia_proyectada = lote_posicion * (tp - precio if "LONG" in tipo_operacion else precio - tp)
 
-# Métricas visuales detalladas
-c1, c2 = st.columns(2)
-c1.metric("Riesgo Máximo en Dinero", f"${riesgo_dinero:,.2f} USD")
-c2.metric("Lote / Tamaño de Posición", f"{lote_posicion:.4f} unidades")
-
-c3, c4 = st.columns(2)
-c3.metric("Precio Máximo Swing", f"{swing_high:,.5f}")
-c4.metric("Precio Mínimo Swing", f"{swing_low:,.5f}")
-
-st.markdown(f"**📐 Zona Áurea Fibonacci (61.8% - 50%):** `[{f618:,.5f}  ---  {f500:,.5f}]`")
-st.markdown(f"**🔍 Estado de Zona:** `{'EN ZONA ÁUREA ✅' if en_zona else 'FUERA DE ZONA ⏳ (Esperando retroceso)'}`")
-
-st.divider()
-st.subheader("🎯 Ejecución, Ganancias y Alertas")
-
 m1, m2 = st.columns(2)
-m1.metric("Precio de Entrada", f"{precio:,.5f}")
-m1.metric("Stop Loss (SL)", f"{sl:,.5f}")
-m2.metric("Take Profit (TP)", f"{tp:,.5f}")
-m2.metric("Ganancia Proyectada", f"${ganancia_proyectada:,.2f} USD", delta=f"R:R 1:{cfg['rr']}")
+m1.metric("Precio de Entrada ($)", f"{precio:,.2f}")
+m1.metric("Límite de Pérdida (Stop Loss - SL)", f"{sl:,.2f}")
+m2.metric("Toma de Ganancia (Take Profit - TP)", f"{tp:,.2f}")
+m2.metric("Riesgo Máximo en Dinero", f"${riesgo_dinero:,.2f} USD")
+
+st.metric("Lote / Tamaño de Posición", f"{lote_posicion:.4f} unidades")
 
 # Bitácora
 if st.button("💾 Guardar Operación en Bitácora", use_container_width=True):
     st.session_state.bitacora.append({
         "Símbolo": activo_sel,
         "Dirección": tipo_operacion.split()[0],
-        "Entrada": f"{precio:.5f}",
-        "SL": f"{sl:.5f}",
-        "TP": f"{tp:.5f}",
+        "Entrada": f"{precio:.2f}",
+        "SL": f"{sl:.2f}",
+        "TP": f"{tp:.2f}",
         "Riesgo ($)": f"${riesgo_dinero:.2f}",
         "Ganancia ($)": f"${ganancia_proyectada:.2f}"
     })
@@ -127,12 +125,12 @@ mensaje_senal = (
     f"🚨 *WILFER TRADING SUITE - SEÑAL* 🚨\n\n"
     f"📌 *Símbolo:* {activo_sel}\n"
     f"📈 *Dirección:* {tipo_operacion}\n"
-    f"🎯 *Entrada:* {precio:,.5f}\n"
-    f"🛑 *Stop Loss:* {sl:,.5f}\n"
-    f"🏆 *Take Profit:* {tp:,.5f}\n"
+    f"🎯 *Entrada:* {precio:,.2f}\n"
+    f"🛑 *Stop Loss:* {sl:,.2f}\n"
+    f"🏆 *Take Profit:* {tp:,.2f}\n"
     f"💵 *Riesgo Máximo:* ${riesgo_dinero:,.2f} USD\n"
-    f"💰 *Ganancia Proyectada:* ${ganancia_proyectada:,.2f} USD\n"
-    f"⚖️ *Lote / Posición:* {lote_posicion:.4f}"
+    f"⚖️ *Lote / Posición:* {lote_posicion:.4f} unidades\n"
+    f"📐 *Zona Áurea 61.8%: * ${f618:,.2f}"
 )
 msg_encoded = urllib.parse.quote(mensaje_senal)
 link_wa = f"https://api.whatsapp.com/send?text={msg_encoded}"
