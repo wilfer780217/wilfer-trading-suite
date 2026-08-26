@@ -1,0 +1,56 @@
+import streamlit as st
+
+st.set_page_config(page_title="Wilfer Trading Suite Pro", layout="wide")
+
+st.title("🛡️ WILFER TRADING SUITE PRO - PANEL DE CONTROL")
+st.caption("Comando Estratégico, Gestión de Riesgo y Ejecución Algorítmica Multi-Mercado")
+st.markdown("---")
+
+# --- MÓDULO DE PARÁMETROS Y GESTIÓN DE RIESGO ---
+st.sidebar.header("⚙️ Parámetros de Riesgo")
+capital_cuenta = st.sidebar.number_input("Capital de la Cuenta ($)", value=10000.0, step=500.0)
+riesgo_porc = st.sidebar.slider("Riesgo por Operación (%)", 0.5, 3.0, 1.0, 0.1)
+ratio_rr = st.sidebar.selectbox("Ratio Riesgo / Beneficio (R:R)", [2.0, 3.0, 4.0], index=0)
+
+riesgo_usd = capital_cuenta * (riesgo_porc / 100.0)
+
+st.sidebar.markdown("---")
+st.sidebar.metric(label="Riesgo Máximo Permitido", value=f"${riesgo_usd:.2f} USD")
+
+# --- SIMULACIÓN DE MERCADOS CON NIVELES SL / TP ---
+mercados = [
+    {"symbol": "BTCUSD", "precio": 78125.50, "atr": 2553.33, "bos": "ALCISTA", "fib_min": 69772.41, "fib_max": 71961.07},
+    {"symbol": "ETHUSD", "precio": 2451.95, "atr": 105.87, "bos": "ALCISTA", "fib_min": 2128.65, "fib_max": 2208.31},
+    {"symbol": "EURUSD", "precio": 1.16564, "atr": 0.00517, "bos": "ALCISTA", "fib_min": 1.15890, "fib_max": 1.16126},
+    {"symbol": "XAUUSD", "precio": 4657.00, "atr": 79.46, "bos": "ALCISTA", "fib_min": 4473.87, "fib_max": 4522.95},
+    {"symbol": "SOLUSD", "precio": 96.21, "atr": 4.26, "bos": "ALCISTA", "fib_min": 85.17, "fib_max": 88.49},
+]
+
+st.subheader("📊 Análisis de Mercado y Niveles Tácticos (SL / TP)")
+
+cols = st.columns(len(mercados))
+
+for idx, m in enumerate(mercados):
+    with cols[idx]:
+        st.markdown(f"### **{m['symbol']}**")
+        st.write(f"**Precio:** {m['precio']}")
+        st.write(f"**BOS:** {m['bos']}")
+        st.write(f"**ATR:** {m['atr']}")
+        
+        # Cálculo dinámico de SL y TP según entrada en Zona Áurea
+        precio_entrada = m["fib_max"]
+        distancia_sl = m["atr"] * 1.5
+        stop_loss = precio_entrada - distancia_sl
+        distancia_tp = distancia_sl * ratio_rr
+        take_profit = precio_entrada + distancia_tp
+        
+        st.markdown("---")
+        st.markdown("**🎯 Plan de Ejecución Sugerido:**")
+        st.info(f"**Entrada Ideal:** {precio_entrada:.2f}")
+        st.error(f"**Stop Loss (SL):** {stop_loss:.2f}")
+        st.success(f"**Take Profit (TP):** {take_profit:.2f}")
+        st.warning(f"**R:R Proyectado:** 1:{ratio_rr:.1f}")
+
+st.markdown("---")
+st.subheader("📜 Bitácora de Señales y Ejecución")
+st.write("⏳ Esperando alineación perfecta en zona áurea y confirmación de volumen en temporalidades menores...")
