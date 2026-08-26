@@ -2,27 +2,35 @@ import streamlit as st
 import streamlit.components.v1 as components
 import urllib.parse
 import pandas as pd
+import ccxt  # Librería estándar para conectar con Binance y otros exchanges
 
 st.set_page_config(page_title="Wilfer Trading Suite - Total Pro", layout="wide", page_icon="⚡")
 
 if "bitacora" not in st.session_state:
     st.session_state.bitacora = []
 
-st.title("⚡ WILFER TRADING SUITE - MOTOR TOTAL PRO")
+st.title("⚡ WILFER TRADING SUITE - MOTOR TOTAL PRO (CONEXIÓN BINANCE)")
 
-# --- PANEL DE CONFIGURACIÓN Y SELECCIÓN ---
-st.sidebar.header("⚙️ Configuración del Broker")
+# --- PANEL DE CONFIGURACIÓN Y CREDENCIALES API ---
+st.sidebar.header("⚙️ Configuración del Broker & API")
 capital = st.sidebar.number_input("Capital Total de la Cuenta ($)", value=10000.0, step=500.0, format="%.2f")
 riesgo_usr_pct = st.sidebar.slider("Riesgo por Operación (%)", min_value=0.1, max_value=5.0, value=2.0, step=0.1)
 
+st.sidebar.divider()
+st.sidebar.subheader("🔑 Credenciales de Binance")
+binance_api_key = st.sidebar.text_input("Binance API Key", type="password")
+binance_secret_key = st.sidebar.text_input("Binance Secret Key", type="password")
+modo_testnet = st.sidebar.checkbox("Usar Binance Testnet (Modo Pruebas / Sin Dinero Real)", value=True)
+
 st.subheader("🌐 Selección de Activo y Datos de Mercado")
-activo_sel = st.selectbox("Símbolo del Activo", ["BTCUSD", "ETHUSD", "EURUSD"])
+# Usamos símbolos compatibles con Binance Futures o Spot (ej: BTC/USDT)
+activo_sel = st.selectbox("Símbolo del Activo", ["BTC/USDT", "ETH/USDT"])
 tipo_operacion = st.radio("Dirección del Mercado", ["LONG (Compra Alcista)", "SHORT (Venta Bajista)"], horizontal=True)
 
 st.divider()
 st.subheader("📐 Planificación y Parámetros Manuales (Tus Niveles Exactos)")
 
-# Campos totalmente manuales para que pongas el precio exacto que quieras
+# Campos manuales para definir la operación
 col_e1, col_e2 = st.columns(2)
 with col_e1:
     precio_manual = st.number_input("Precio de Entrada ($)", value=67000.00, step=1.0, format="%.2f")
@@ -30,7 +38,7 @@ with col_e1:
 with col_e2:
     tp_manual = st.number_input("Take Profit - TP ($)", value=68250.00, step=1.0, format="%.2f")
 
-# Cálculos matemáticos exactos basados en tus inputs
+# Cálculos matemáticos de riesgo y lotes
 riesgo_dinero = capital * (riesgo_usr_pct / 100.0)
 riesgo_unitario = abs(precio_manual - sl_manual)
 lote_posicion = riesgo_dinero / riesgo_unitario if riesgo_unitario > 0 else 0.0
@@ -38,13 +46,15 @@ lote_posicion = riesgo_dinero / riesgo_unitario if riesgo_unitario > 0 else 0.0
 if "LONG" in tipo_operacion:
     ganancia_proyectada = lote_posicion * abs(tp_manual - precio_manual)
     rr_actual = abs(tp_manual - precio_manual) / riesgo_unitario if riesgo_unitario > 0 else 0.0
+    side_binance = "buy"
 else:
     ganancia_proyectada = lote_posicion * abs(precio_manual - tp_manual)
     rr_actual = abs(precio_manual - tp_manual) / riesgo_unitario if riesgo_unitario > 0 else 0.0
+    side_binance = "sell"
 
 st.divider()
 
-# --- PANEL DE NIVELES EXACTOS (EL ASISTENTE TÉCNICO PRECISO) ---
+# --- PANEL DE CONTROL Y NIVELES EXACTOS ---
 st.subheader("🎯 Panel de Control y Niveles Exactos (Bot v6.64)")
 
 col_n1, col_n2, col_n3 = st.columns(3)
@@ -54,13 +64,58 @@ col_n3.metric("Ganancia Proyectada (TP)", f"${ganancia_proyectada:,.2f} USD")
 
 st.markdown("---")
 
-# Métricas de Ejecución Final
 m1, m2 = st.columns(2)
 m1.metric("Riesgo Máximo en Dinero", f"${riesgo_dinero:,.2f} USD")
-m2.metric("Lote / Tamaño de Posición Exacto", f"{lote_posicion:.4f} unidades")
+m2.metric("Tamaño de Posición / Lote", f"{lote_posicion:.4f} unidades")
 
-# Bitácora
-if st.button("💾 Guardar Operación en Bitácora", use_container_width=True):
+st.divider()
+
+# --- BOTÓN DE EJECUCIÓN REAL EN BINANCE ---
+st.subheader("🚀 Ejecución Directa en el Mercado")
+
+if st.button("⚡ ENVIAR ORDEN REAL A BINANCE", use_container_width=True, type="primary"):
+    if not binance_api_key or not binance_secret_key:
+        st.error("⚠️ Por favor, ingresa tu API Key y Secret Key de Binance en la barra lateral.")
+    else:
+        try:
+            # Inicializar conexión con Binance a través de CCXT
+            exchange = ccxt.binance({
+                'apiKey': binance_api_key,
+                'secret': binance_secret_key,
+                'enableRateLimit': True,
+            })
+            
+            if modo_testnet:
+                exchange.set_sandbox_mode(True)  # Activa entorno de pruebas seguro de Binance
+            
+            # Ejecutar orden de mercado o límite según prefieras (aquí enviamos orden de mercado base)
+            # Nota: Para órdenes OCO con Stop Loss y Take Profit automáticos en Binance:
+            orden = exchange.create_order(
+                symbol=activo_sel,
+                type='market',
+                side=side_binance,
+                amount=lote_posicion
+            )
+            
+            st.success(f"¡Orden ejecutada con éxito en Binance! ID de orden: {orden['id']}")
+            
+            # Guardar en bitácora automáticamente
+            st.session_state.bitacora.append({
+                "Símbolo": activo_sel,
+                "Dirección": tipo_operacion.split()[0],
+                "Entrada": f"{precio_manual:.2f}",
+                "SL": f"{sl_manual:.2f}",
+                "TP": f"{tp_manual:.2f}",
+                "Riesgo ($)": f"${riesgo_dinero:.2f}",
+                "Ganancia ($)": f"${ganancia_proyectada:.2f}",
+                "Estado": "EJECUTADA EN BINANCE ✅"
+            })
+            
+        except Exception as e:
+            st.error(f"❌ Error al conectar o ejecutar la orden en Binance: {e}")
+
+# Bitácora manual tradicional
+if st.button("💾 Guardar Solo en Bitácora (Sin Ejecutar)", use_container_width=True):
     st.session_state.bitacora.append({
         "Símbolo": activo_sel,
         "Dirección": tipo_operacion.split()[0],
@@ -68,38 +123,18 @@ if st.button("💾 Guardar Operación en Bitácora", use_container_width=True):
         "SL": f"{sl_manual:.2f}",
         "TP": f"{tp_manual:.2f}",
         "Riesgo ($)": f"${riesgo_dinero:.2f}",
-        "Ganancia ($)": f"${ganancia_proyectada:.2f}"
+        "Ganancia ($)": f"${ganancia_proyectada:.2f}",
+        "Estado": "PLANIFICADA 📝"
     })
     st.success("¡Operación registrada correctamente en la bitácora!")
-
-# Botones de compartir señal operativa
-mensaje_senal = (
-    f"🚨 *WILFER TRADING SUITE - SEÑAL* 🚨\n\n"
-    f"📌 *Símbolo:* {activo_sel}\n"
-    f"📈 *Dirección:* {tipo_operacion}\n"
-    f"🎯 *Entrada:* {precio_manual:,.2f}\n"
-    f"🛑 *Stop Loss:* {sl_manual:,.2f}\n"
-    f"🏆 *Take Profit:* {tp_manual:,.2f}\n"
-    f"💵 *Riesgo Máximo:* ${riesgo_dinero:,.2f} USD\n"
-    f"⚖️ *Lote / Posición:* {lote_posicion:.4f} unidades\n"
-    f"📊 *R:R:* 1:{rr_actual:.2f}"
-)
-msg_encoded = urllib.parse.quote(mensaje_senal)
-link_wa = f"https://api.whatsapp.com/send?text={msg_encoded}"
-link_tg = f"https://t.me/share/url?url=&text={msg_encoded}"
-
-st.markdown("##### 📲 Compartir Señal Operativa:")
-col_w, col_t = st.columns(2)
-with col_w:
-    st.markdown(f'<a href="{link_wa}" target="_blank" style="text-decoration:none;"><button style="width:100%;background-color:#25D366;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">📲 WhatsApp</button></a>', unsafe_allow_html=True)
-with col_t:
-    st.markdown(f'<a href="{link_tg}" target="_blank" style="text-decoration:none;"><button style="width:100%;background-color:#0088cc;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">✈️ Telegram</button></a>', unsafe_allow_html=True)
 
 st.divider()
 
 # --- GRÁFICO TRADINGVIEW EN VIVO ---
 st.subheader(f"📈 Gráfico Profesional en Vivo: {activo_sel}")
-ticker_tv = f"BINANCE:{activo_sel}T" if activo_sel in ["BTCUSD", "ETHUSD"] else f"FOREXCOM:{activo_sel}"
+# Adaptar formato de símbolo para TradingView (ej: BTCUSDT)
+simbolo_tv = activo_sel.replace("/", "")
+ticker_tv = f"BINANCE:{simbolo_tv}"
 
 widget_tv = f"""
 <div style="height:500px;width:100%">
