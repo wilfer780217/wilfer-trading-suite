@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 
-st.set_page_config(page_title="Wilfer Trading Suite", layout="wide", page_icon="📊")
+st.set_page_config(page_title="Wilfer Trading Suite Pro", layout="wide", page_icon="📊")
 
 class WilferTradingEngineTotal:
     def __init__(self, capital_inicial=1000.0):
@@ -27,11 +27,13 @@ class WilferTradingEngineTotal:
         df['fib_618'] = df['swing_high'] - (rango_fib * 0.618)
         return df
 
-st.title("📊 WILFER TRADING SUITE - ESCANEO TOTAL")
+# --- INTERFAZ COMPLETA LIMPIA ---
+st.title("⚡ WILFER TRADING SUITE PRO")
 
-st.sidebar.header("⚙️ Configuración")
+st.sidebar.header("⚙️ Gestión de Cuenta")
 capital = st.sidebar.number_input("Capital Inicial ($)", value=1000.0, step=100.0)
 
+# Simulación de datos exactos de tu motor
 np.random.seed(999)
 n = 150
 p_btc = 64000 + np.cumsum(np.random.randn(n) * 150)
@@ -61,16 +63,20 @@ for tab, (activo, df) in zip(tabs, mercados_activos.items()):
         en_zona = (precio <= f500) and (precio >= f618)
         es_alcista = precio > sma
 
-        st.subheader(f"Activo: {activo}")
+        st.subheader(f"📊 Panel de Análisis: {activo}")
         
-        col1, col2 = st.columns(2)
-        col1.metric("Precio Actual", f"{precio:.5f}")
-        col2.metric(f"Tendencia (SMA {cfg['sma']})", f"{sma:.5f}")
+        # Bloques Métricos Principales
+        c1, c2 = st.columns(2)
+        c1.metric("Precio Actual", f"{precio:.5f}")
+        c2.metric(f"Tendencia (SMA {cfg['sma']})", f"{sma:.5f}")
         
-        col3, col4 = st.columns(2)
-        col3.metric("Volatilidad (ATR)", f"{atr:.5f}")
-        col4.metric("Rango Fib (61.8% - 50%)", f"[{f618:.4f} - {f500:.4f}]")
+        c3, c4 = st.columns(2)
+        c3.metric("Volatilidad (ATR)", f"{atr:.5f}")
+        c4.metric("Rango Fibonacci (61.8% - 50%)", f"[{f618:.4f} - {f500:.4f}]")
 
+        st.divider()
+
+        # Evaluación de Señales de Entrada
         if en_zona:
             tipo = "LONG (COMPRA)" if es_alcista else "SHORT (VENTA)"
             if es_alcista:
@@ -84,19 +90,15 @@ for tab, (activo, df) in zip(tabs, mercados_activos.items()):
             capital_a_arriesgar = motor.capital_inicial * cfg["riesgo_pct"]
             
             st.success(f"🚨 ¡SEÑAL CONFIRMADA: {tipo}!")
-            c1, c2 = st.columns(2)
-            c1.metric("Entrada Exacta", f"{precio:.5f}")
-            c1.metric("Stop Loss (SL)", f"{sl:.5f}")
-            c2.metric("Take Profit (TP)", f"{tp:.5f}")
-            c2.metric("Riesgo Monetario", f"${capital_a_arriesgar:.2f}")
+            
+            m1, m2 = st.columns(2)
+            m1.metric("Entrada Exacta", f"{precio:.5f}")
+            m1.metric("Stop Loss (SL)", f"{sl:.5f}")
+            m2.metric("Take Profit (TP)", f"{tp:.5f}")
+            m2.metric("Riesgo Monetario", f"${capital_a_arriesgar:.2f} ({cfg['riesgo_pct']*100}%)")
         else:
             st.info("⏳ [ESTADO]: Fuera de zona áurea. Esperando retroceso matemático...")
 
-        st.subheader("📈 Gráfico de Precios e Indicadores")
-        df_grafico = df_calc[['close', 'sma', 'fib_500', 'fib_618']].rename(columns={
-            'close': 'Precio Cierre',
-            'sma': f'SMA {cfg["sma"]}',
-            'fib_500': 'Fib 50.0%',
-            'fib_618': 'Fib 61.8%'
-        })
-        st.line_chart(df_grafico)
+        st.divider()
+        st.write("📋 **Tabla de Historial Técnico Reciente**")
+        st.dataframe(df_calc[['close', 'sma', 'atr', 'fib_500', 'fib_618']].tail(10), use_container_width=True)
