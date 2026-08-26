@@ -2,16 +2,17 @@ import streamlit as st
 import streamlit.components.v1 as components
 import urllib.parse
 import pandas as pd
+import random
 
 st.set_page_config(page_title="Wilfer Trading Suite - Terminal Pro", layout="wide", page_icon="⚡")
 
 # Inicializar estados de sesión
 if "bitacora" not in st.session_state:
     st.session_state.bitacora = []
+if "ordenes_activas" not in st.session_state:
+    st.session_state.ordenes_activas = []
 if "posicion_activa" not in st.session_state:
     st.session_state.posicion_activa = False
-if "detalle_operacion" not in st.session_state:
-    st.session_state.detalle_operacion = {}
 
 st.title("⚡ WILFER TRADING SUITE - TERMINAL PRO DE EJECUCIÓN")
 
@@ -23,12 +24,7 @@ riesgo_usr_pct = st.sidebar.slider("Riesgo por Operación (%)", min_value=0.1, m
 st.sidebar.divider()
 st.sidebar.markdown("### 🛡️ Estado del Sistema")
 if st.session_state.posicion_activa:
-    st.sidebar.error("🔴 ESTADO: Posición Abierta en Terminal")
-    if st.sidebar.button("🛑 Cerrar Posición Actual"):
-        st.session_state.posicion_activa = False
-        st.session_state.detalle_operacion = {}
-        st.sidebar.success("¡Posición cerrada con éxito!")
-        st.rerun()
+    st.sidebar.error("🔴 ESTADO: Orden en Curso")
 else:
     st.sidebar.success("🟢 ESTADO: Esperando / Libre de Riesgo")
 
@@ -83,38 +79,90 @@ col_btn1, col_btn2 = st.columns(2)
 
 with col_btn1:
     if st.button("🟢 EJECUTAR COMPRA (LONG)", use_container_width=True, type="primary"):
-        st.session_state.posicion_activa = True
-        st.session_state.detalle_operacion = {
+        nueva_orden = {
+            "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
             "Símbolo": activo_sel,
-            "Dirección": "LONG",
+            "Tipo": "LONG",
             "Entrada": f"{precio_manual:.2f}",
             "SL": f"{sl_manual:.2f}",
             "TP": f"{tp_manual:.2f}",
-            "Riesgo ($)": f"${riesgo_dinero:.2f}",
-            "Ganancia ($)": f"${ganancia_proyectada:.2f}",
-            "Lote": f"{lote_posicion:.4f}"
+            "Lote": f"{lote_posicion:.4f}",
+            "Riesgo ($)": f"${riesgo_dinero:.2f}"
         }
-        st.session_state.bitacora.append(st.session_state.detalle_operacion)
-        st.success("¡Orden LONG ejecutada en la terminal con éxito!")
+        st.session_state.ordenes_activas.append(nueva_orden)
+        st.session_state.posicion_activa = True
+        st.success("¡Orden LONG enviada a la bandeja de órdenes activas!")
 
 with col_btn2:
     if st.button("🔴 EJECUTAR VENTA (SHORT)", use_container_width=True, type="primary"):
-        st.session_state.posicion_activa = True
-        st.session_state.detalle_operacion = {
+        nueva_orden = {
+            "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
             "Símbolo": activo_sel,
-            "Dirección": "SHORT",
+            "Tipo": "SHORT",
             "Entrada": f"{precio_manual:.2f}",
             "SL": f"{sl_manual:.2f}",
             "TP": f"{tp_manual:.2f}",
-            "Riesgo ($)": f"${riesgo_dinero:.2f}",
-            "Ganancia ($)": f"${ganancia_proyectada:.2f}",
-            "Lote": f"{lote_posicion:.4f}"
+            "Lote": f"{lote_posicion:.4f}",
+            "Riesgo ($)": f"${riesgo_dinero:.2f}"
         }
-        st.session_state.bitacora.append(st.session_state.detalle_operacion)
-        st.success("¡Orden SHORT ejecutada en la terminal con éxito!")
+        st.session_state.ordenes_activas.append(nueva_orden)
+        st.session_state.posicion_activa = True
+        st.success("¡Orden SHORT enviada a la bandeja de órdenes activas!")
 
-if st.session_state.posicion_activa:
-    st.info(f"📊 **Posición Activa en curso:** {st.session_state.detalle_operacion.get('Dirección')} en {st.session_state.detalle_operacion.get('Símbolo')} | Lote: {st.session_state.detalle_operacion.get('Lote')}")
+st.divider()
+
+# --- PANEL DE ÓRDENES ACTIVAS (DONDE VAN LAS ÓRDENES) ---
+st.subheader("📋 Bandeja de Órdenes Activas en el Mercado")
+
+if st.session_state.ordenes_activas:
+    df_ordenes = pd.DataFrame(st.session_state.ordenes_activas)
+    st.dataframe(df_ordenes, use_container_width=True)
+    
+    col_acc1, col_acc2 = st.columns(2)
+    with col_acc1:
+        if st.button("✅ Cerrar y Pasar Orden a Bitácora (Cierre con Éxito / TP)"):
+            orden_cerrada = st.session_state.ordenes_activas.pop(0)
+            pnl_cierre = round(ganancia_proyectada * random.choice([0.8, 1.0]), 2)
+            orden_cerrada["P&L ($)"] = pnl_cierre
+            orden_cerrada["Estado"] = "CERRADA CON GANANCIA 🟢"
+            st.session_state.bitacora.append(orden_cerrada)
+            if not st.session_state.ordenes_activas:
+                st.session_state.posicion_activa = False
+            st.success("¡Orden cerrada con éxito y registrada en la bitácora!")
+            st.rerun()
+            
+    with col_acc2:
+        if st.button("❌ Cerrar por Stop Loss (Cierre en Pérdida)"):
+            orden_cerrada = st.session_state.ordenes_activas.pop(0)
+            pnl_cierre = -round(riesgo_dinero, 2)
+            orden_cerrada["P&L ($)"] = pnl_cierre
+            orden_cerrada["Estado"] = "CERRADA EN SL 🔴"
+            st.session_state.bitacora.append(orden_cerrada)
+            if not st.session_state.ordenes_activas:
+                st.session_state.posicion_activa = False
+            st.warning("¡Orden cerrada por Stop Loss y registrada en la bitácora!")
+            st.rerun()
+else:
+    st.info("No hay órdenes activas en este momento. Ejecuta una compra o venta arriba para verla aquí.")
+
+st.divider()
+
+# --- PANEL DE GANANCIAS Y PÉRDIDAS (P&L ACUMULADO) ---
+st.subheader("📊 Panel de Ganancias y Pérdidas (P&L Acumulado)")
+
+if st.session_state.bitacora:
+    df_bitacora = pd.DataFrame(st.session_state.bitacora)
+    if "P&L ($)" in df_bitacora.columns:
+        pnl_total = df_bitacora["P&L ($)"].sum()
+        ganadas = len(df_bitacora[df_bitacora["P&L ($)"] > 0])
+        perdidas = len(df_bitacora[df_bitacora["P&L ($)"] < 0])
+        
+        col_p1, col_p2, col_p3 = st.columns(3)
+        col_p1.metric("P&L Total Acumulado", f"${pnl_total:,.2f} USD")
+        col_p2.metric("Operaciones Ganadoras", f"{ganadas}")
+        col_p3.metric("Operaciones Perdedoras", f"{perdidas}")
+else:
+    st.info("El balance P&L se actualizará cuando cierres tus órdenes activas.")
 
 st.divider()
 
@@ -172,13 +220,12 @@ components.html(widget_tv, height=510)
 
 st.divider()
 
-# --- BITÁCORA GENERAL ---
-st.subheader("📖 Bitácora e Historial Operativo")
+# --- BITÁCORA GENERAL DE HISTORIAL ---
+st.subheader("📖 Bitácora General (Historial de Operaciones Cerradas)")
 if st.session_state.bitacora:
     st.dataframe(pd.DataFrame(st.session_state.bitacora), use_container_width=True)
     if st.button("🗑️ Limpiar Historial de Bitácora"):
         st.session_state.bitacora = []
-        st.session_state.posicion_activa = False
         st.rerun()
 else:
-    st.info("No hay operaciones ejecutadas en la terminal todavía.")
+    st.info("No hay operaciones cerradas registradas en la bitácora todavía.")
