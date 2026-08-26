@@ -1,76 +1,109 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="Wilfer Trading Suite Pro", layout="wide", page_icon="📈")
+st.set_page_config(page_title="Wilfer Trading Suite Total", layout="wide", page_icon="📊")
 
-st.title("🛡️ WILFER TRADING SUITE PRO")
-st.caption("Comando Estratégico de Trading - Fibonacci & Gestión de Riesgo 24/7")
+class WilferTradingEngineTotal:
+    def __init__(self, capital_inicial=1000.0):
+        self.capital_inicial = capital_inicial
+        self.config_mercados = {
+            "BTCUSD": {"sma": 50, "atr_p": 14, "sl_mult": 3.0, "rr": 2.5, "riesgo_pct": 0.02},
+            "ETHUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.5, "rr": 2.5, "riesgo_pct": 0.02},
+            "EURUSD": {"sma": 50, "atr_p": 14, "sl_mult": 2.0, "rr": 2.0, "riesgo_pct": 0.015}
+        }
 
-# Sidebar - Configuración
-st.sidebar.header("Configuración de la Operación")
-activo = st.sidebar.text_input("Activo / Par", value="BTCUSD")
-capital = st.sidebar.number_input("Capital de la Cuenta ($)", value=1000.0, step=100.0)
-riesgo_pct = st.sidebar.number_input("Riesgo por Operación (%)", value=2.0, step=0.5)
+    def calcular_mercado(self, nombre_activo, df):
+        cfg = self.config_mercados[nombre_activo]
+        df['sma'] = df['close'].rolling(window=cfg["sma"]).mean()
+        hl = df['high'] - df['low']
+        hc = np.abs(df['high'] - df['close'].shift())
+        lc = np.abs(df['low'] - df['close'].shift())
+        df['atr'] = pd.concat([hl, hc, lc], axis=1).max(axis=1).rolling(window=cfg["atr_p"]).mean()
+        df['swing_high'] = df['high'].rolling(window=20, min_periods=1).max()
+        df['swing_low'] = df['low'].rolling(window=20, min_periods=1).min()
+        rango_fib = df['swing_high'] - df['swing_low']
+        df['fib_500'] = df['swing_high'] - (rango_fib * 0.500)
+        df['fib_618'] = df['swing_high'] - (rango_fib * 0.618)
+        return df
 
-riesgo_usd = capital * (riesgo_pct / 100.0)
-st.sidebar.info(f"Riesgo Máximo Definido: ${riesgo_usd:.2f} USD")
+st.title("📊 WILFER TRADING SUITE - ESCANEO Y CÁLCULO TOTAL DE MERCADOS")
 
-# Secciones Principales
-col1, col2 = st.columns(2)
+st.sidebar.header("⚙️ Configuración General")
+capital = st.sidebar.number_input("Capital Inicial ($)", value=1000.0, step=100.0)
 
-with col1:
-    st.subheader("📐 Calculadora Fibonacci & Entrada")
-    alto = st.number_input("Precio Máximo (Swing High)", value=82000.0, step=100.0)
-    bajo = st.number_input("Precio Mínimo (Swing Low)", value=75000.0, step=100.0)
-    
-    # Validación de escala para Bitcoin (Candado anti-error)
-    if "BTC" in activo.upper() and (alto < 10000 or bajo < 10000):
-        st.error("🚨 ERROR DE ESCALA: El precio ingresado para BTCUSD es demasiado bajo (< $10,000). Revisa ceros y decimales.")
-    
-    dif = alto - bajo
-    fib_618 = bajo + (dif * 0.618)
-    st.success(f"🔵 Zona Entrada Fib 61.8%: ${fib_618:,.2f}")
+# Generación de Datos de Mercado
+np.random.seed(999)
+n = 150
+p_btc = 64000 + np.cumsum(np.random.randn(n) * 150)
+df_btc = pd.DataFrame({'open': p_btc, 'high': p_btc + 200, 'low': p_btc - 200, 'close': p_btc + np.random.randn(n)*50})
+p_eth = 3100 + np.cumsum(np.random.randn(n) * 25)
+df_eth = pd.DataFrame({'open': p_eth, 'high': p_eth + 40, 'low': p_eth - 40, 'close': p_eth + np.random.randn(n)*10})
+p_eur = 1.0850 + np.cumsum(np.random.randn(n) * 0.0008)
+df_eur = pd.DataFrame({'open': p_eur, 'high': p_eur + 0.002, 'low': p_eur - 0.002, 'close': p_eur + np.random.randn(n)*0.0005})
 
-with col2:
-    st.subheader("🛡️ Gestión de Riesgo y Posición")
-    precio_entrada = st.number_input("Precio de Entrada Real ($)", value=fib_618, step=100.0)
-    stop_loss = st.number_input("Stop Loss ($)", value=bajo, step=100.0)
-    take_profit = st.number_input("Take Profit ($)", value=alto, step=100.0)
-    
-    # Validaciones de seguridad
-    es_valido = True
-    if "BTC" in activo.upper() and (precio_entrada < 10000 or stop_loss < 10000):
-        st.error("🚨 ERROR DE PRECIO: BTCUSD debe ingresarse con la escala de precio completa (ej. 79500).")
-        es_valido = False
-    
-    distancia_sl = abs(precio_entrada - stop_loss)
-    
-    if distancia_sl == 0:
-        st.warning("El Stop Loss no puede ser igual al precio de entrada.")
-    elif es_valido:
-        lotes = riesgo_usd / distancia_sl
-        distancia_tp = abs(take_profit - precio_entrada)
-        rr_ratio = distancia_tp / distancia_sl if distancia_sl > 0 else 0
+mercados_activos = {"BTCUSD": df_btc, "ETHUSD": df_eth, "EURUSD": df_eur}
+motor = WilferTradingEngineTotal(capital_inicial=capital)
+
+tabs = st.tabs(list(mercados_activos.keys()))
+
+for tab, (activo, df) in zip(tabs, mercados_activos.items()):
+    with tab:
+        df_calc = motor.calcular_mercado(activo, df)
+        idx = len(df_calc) - 1
+        precio = df_calc['close'].iloc[idx]
+        f500 = df_calc['fib_500'].iloc[idx]
+        f618 = df_calc['fib_618'].iloc[idx]
+        sma = df_calc['sma'].iloc[idx]
+        atr = df_calc['atr'].iloc[idx]
+        cfg = motor.config_mercados[activo]
+        en_zona = (precio <= f500) and (precio >= f618)
+        es_alcista = precio > sma
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Precio Actual", f"{precio:.5f}")
+        col2.metric(f"Tendencia (SMA {cfg['sma']})", f"{sma:.5f}")
+        col3.metric("Volatilidad (ATR)", f"{atr:.5f}")
+        col4.metric("Rango Fib (61.8% - 50%)", f"[{f618:.5f} - {f500:.5f}]")
+
+        if en_zona:
+            tipo = "LONG (COMPRA)" if es_alcista else "SHORT (VENTA)"
+            if es_alcista:
+                sl = precio - (atr * cfg["sl_mult"])
+                riesgo_unitario = precio - sl
+                tp = precio + (riesgo_unitario * cfg["rr"])
+            else:
+                sl = precio + (atr * cfg["sl_mult"])
+                riesgo_unitario = sl - precio
+                tp = precio - (riesgo_unitario * cfg["rr"])
+            capital_a_arriesgar = motor.capital_inicial * cfg["riesgo_pct"]
+            
+            st.success(f"🚨 ¡SEÑAL CONFIRMADA: {tipo}!")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Entrada Exacta", f"{precio:.5f}")
+            c2.metric("Stop Loss (SL)", f"{sl:.5f}")
+            c3.metric("Take Profit (TP)", f"{tp:.5f}")
+            c4.metric("Riesgo Monetario", f"${capital_a_arriesgar:.2f} ({cfg['riesgo_pct']*100}%)")
+        else:
+            st.info("⏳ [ESTADO]: Fuera de zona áurea. Esperando retroceso matemático...")
+
+        # Gráfico interactivo con Velas, SMA y Fibonacci
+        fig = go.Figure()
+        fig.add_trace(go.Candlestick(
+            x=df_calc.index, open=df_calc['open'], high=df_calc['high'],
+            low=df_calc['low'], close=df_calc['close'], name="Precio"
+        ))
+        fig.add_trace(go.Scatter(x=df_calc.index, y=df_calc['sma'], mode='lines', name=f"SMA {cfg['sma']}", line=dict(color='orange', width=2)))
+        fig.add_trace(go.Scatter(x=df_calc.index, y=df_calc['fib_500'], mode='lines', name="Fib 50%", line=dict(color='blue', dash='dash')))
+        fig.add_trace(go.Scatter(x=df_calc.index, y=df_calc['fib_618'], mode='lines', name="Fib 61.8%", line=dict(color='purple', dash='dash')))
         
-        st.metric("Tamaño de Posición (Lotes / Unidades)", f"{lotes:.4f}")
-        st.metric("Ratio Riesgo / Beneficio (R:R)", f"1 : {rr_ratio:.2f}")
-
-# Botón para registrar en Bitácora
-if st.button("💾 Guardar en Bitácora"):
-    if es_valido and distancia_sl > 0:
-        nueva_op = pd.DataFrame([{
-            "Activo": activo,
-            "Entrada": precio_entrada,
-            "SL": stop_loss,
-            "TP": take_profit,
-            "Riesgo_USD": riesgo_usd,
-            "Lotes": lotes
-        }])
-        try:
-            bitacora = pd.read_csv("bitacora_wilfer.csv")
-            bitacora = pd.concat([bitacora, nueva_op], ignore_index=True)
-        except FileNotFoundError:
-            bitacora = nueva_op
-        bitacora.to_csv("bitacora_wilfer.csv", index=False)
-        st.success("¡Operación registrada con éxito en bitacora_wilfer.csv!")
+        fig.update_layout(
+            title=f"Gráfico Interactivo de Velas y Niveles - {activo}",
+            yaxis_title="Precio",
+            xaxis_title="Velas",
+            template="plotly_dark",
+            xaxis_rangeslider_visible=False,
+            height=500
+        )
+        st.plotly_chart(fig, use_container_width=True)
