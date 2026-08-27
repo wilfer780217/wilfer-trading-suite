@@ -4,7 +4,7 @@ import urllib.parse
 import pandas as pd
 import random
 
-st.set_page_config(page_title="Wilfer Trading Suite - Terminal Pro", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Wilfer Trading Suite - Terminal Pro Auditada", layout="wide", page_icon="⚡")
 
 # Inicializar estados de sesión
 if "bitacora" not in st.session_state:
@@ -14,19 +14,20 @@ if "ordenes_activas" not in st.session_state:
 if "posicion_activa" not in st.session_state:
     st.session_state.posicion_activa = False
 
-st.title("⚡ WILFER TRADING SUITE - TERMINAL PRO DE EJECUCIÓN")
+st.title("⚡ WILFER TRADING SUITE - TERMINAL PRO (AUDITADA & BLINDADA)")
 
 # --- PANEL DE CONFIGURACIÓN Y GESTIÓN DE CUENTA ---
 st.sidebar.header("⚙️ Configuración del Trader")
 capital = st.sidebar.number_input("Capital Total de la Cuenta ($)", value=10000.0, step=500.0, format="%.2f")
 riesgo_usr_pct = st.sidebar.slider("Riesgo por Operación (%)", min_value=0.1, max_value=5.0, value=2.0, step=0.1)
+apalancamiento = st.sidebar.selectbox("Apalancamiento del Broker", [1, 5, 10, 20, 50, 100], index=3)
 
 st.sidebar.divider()
-st.sidebar.markdown("### 🛡️ Estado del Sistema")
-if st.session_state.posicion_activa:
-    st.sidebar.error("🔴 ESTADO: Orden en Curso")
+st.sidebar.markdown("### 🛡️ Estado del Sistema de Auditoría")
+if st.session_state.ordenes_activas:
+    st.sidebar.error(f"🔴 ESTADO: {len(st.session_state.ordenes_activas)} Orden(es) Activa(s)")
 else:
-    st.sidebar.success("🟢 ESTADO: Esperando / Libre de Riesgo")
+    st.sidebar.success("🟢 ESTADO: Sistema Libre de Riesgo")
 
 st.subheader("🌐 Selección de Activo y Mercado")
 activo_sel = st.selectbox("Símbolo del Activo", ["BTCUSD", "ETHUSD", "EURUSD"])
@@ -42,10 +43,34 @@ with col_e1:
 with col_e2:
     tp_manual = st.number_input("Take Profit - TP ($)", value=68250.00, step=1.0, format="%.2f")
 
+# --- ESCUDO DE VALIDACIÓN DE ERRORES (AUDITORÍA LÓGICA) ---
+error_logica = False
+mensaje_error = ""
+
+if "LONG" in tipo_operacion:
+    if sl_manual >= precio_manual:
+        error_logica = True
+        mensaje_error = "⚠️ ERROR DE AUDITORÍA: En un LONG, el Stop Loss debe estar por DEBAJO del Precio de Entrada."
+    if tp_manual <= precio_manual:
+        error_logica = True
+        mensaje_error = "⚠️ ERROR DE AUDITORÍA: En un LONG, el Take Profit debe estar por ENCIMA del Precio de Entrada."
+else:  # SHORT
+    if sl_manual <= precio_manual:
+        error_logica = True
+        mensaje_error = "⚠️ ERROR DE AUDITORÍA: En un SHORT, el Stop Loss debe estar por ENCIMA del Precio de Entrada."
+    if tp_manual >= precio_manual:
+        error_logica = True
+        mensaje_error = "⚠️ ERROR DE AUDITORÍA: En un SHORT, el Take Profit debe estar por DEBAJO del Precio de Entrada."
+
+if error_logica:
+    st.error(mensaje_error)
+
 # Cálculos matemáticos avanzados del motor
 riesgo_dinero = capital * (riesgo_usr_pct / 100.0)
 riesgo_unitario = abs(precio_manual - sl_manual)
 lote_posicion = riesgo_dinero / riesgo_unitario if riesgo_unitario > 0 else 0.0
+valor_nocional = lote_posicion * precio_manual
+margen_requerido = valor_nocional / apalancamiento
 
 if "LONG" in tipo_operacion:
     ganancia_proyectada = lote_posicion * abs(tp_manual - precio_manual)
@@ -57,7 +82,7 @@ else:
 st.divider()
 
 # --- PANEL DE CONTROL Y MÉTRICAS CLAVE ---
-st.subheader("🎯 Panel de Control y Métricas (Bot v6.64)")
+st.subheader("🎯 Panel de Control y Auditoría de Riesgo")
 
 col_n1, col_n2, col_n3 = st.columns(3)
 col_n1.metric("Puntos de Riesgo (SL)", f"{riesgo_unitario:,.2f} USD")
@@ -66,52 +91,59 @@ col_n3.metric("Ganancia Proyectada (TP)", f"${ganancia_proyectada:,.2f} USD")
 
 st.markdown("---")
 
-m1, m2 = st.columns(2)
+m1, m2, m3 = st.columns(3)
 m1.metric("Riesgo Máximo en Dinero", f"${riesgo_dinero:,.2f} USD")
-m2.metric("Lote / Tamaño de Posición Exacto", f"{lote_posicion:.4f} unidades")
+m2.metric("Lote / Tamaño de Posición", f"{lote_posicion:.4f} unidades")
+m3.metric("Margen Requerido (Ap. x{apalancamiento})", f"${margen_requerido:,.2f} USD")
 
 st.divider()
 
-# --- BOTONES DE EJECUCIÓN INTERACTIVA EN LA TERMINAL ---
+# --- BOTONES DE EJECUCIÓN INTERACTIVA BLINDADOS ---
 st.subheader("🚀 Terminal de Disparo y Órdenes")
 
 col_btn1, col_btn2 = st.columns(2)
 
 with col_btn1:
     if st.button("🟢 EJECUTAR COMPRA (LONG)", use_container_width=True, type="primary"):
-        nueva_orden = {
-            "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
-            "Símbolo": activo_sel,
-            "Tipo": "LONG",
-            "Entrada": f"{precio_manual:.2f}",
-            "SL": f"{sl_manual:.2f}",
-            "TP": f"{tp_manual:.2f}",
-            "Lote": f"{lote_posicion:.4f}",
-            "Riesgo ($)": f"${riesgo_dinero:.2f}"
-        }
-        st.session_state.ordenes_activas.append(nueva_orden)
-        st.session_state.posicion_activa = True
-        st.success("¡Orden LONG enviada a la bandeja de órdenes activas!")
+        if error_logica:
+            st.error("No se puede ejecutar la orden: corrige los errores lógicos de SL o TP primero.")
+        else:
+            nueva_orden = {
+                "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
+                "Símbolo": activo_sel,
+                "Tipo": "LONG",
+                "Entrada": f"{precio_manual:.2f}",
+                "SL": f"{sl_manual:.2f}",
+                "TP": f"{tp_manual:.2f}",
+                "Lote": f"{lote_posicion:.4f}",
+                "Riesgo ($)": f"${riesgo_dinero:.2f}"
+            }
+            st.session_state.ordenes_activas.append(nueva_orden)
+            st.session_state.posicion_activa = True
+            st.success("¡Orden LONG validada y enviada a la bandeja de órdenes!")
 
 with col_btn2:
     if st.button("🔴 EJECUTAR VENTA (SHORT)", use_container_width=True, type="primary"):
-        nueva_orden = {
-            "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
-            "Símbolo": activo_sel,
-            "Tipo": "SHORT",
-            "Entrada": f"{precio_manual:.2f}",
-            "SL": f"{sl_manual:.2f}",
-            "TP": f"{tp_manual:.2f}",
-            "Lote": f"{lote_posicion:.4f}",
-            "Riesgo ($)": f"${riesgo_dinero:.2f}"
-        }
-        st.session_state.ordenes_activas.append(nueva_orden)
-        st.session_state.posicion_activa = True
-        st.success("¡Orden SHORT enviada a la bandeja de órdenes activas!")
+        if error_logica:
+            st.error("No se puede ejecutar la orden: corrige los errores lógicos de SL o TP primero.")
+        else:
+            nueva_orden = {
+                "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
+                "Símbolo": activo_sel,
+                "Tipo": "SHORT",
+                "Entrada": f"{precio_manual:.2f}",
+                "SL": f"{sl_manual:.2f}",
+                "TP": f"{tp_manual:.2f}",
+                "Lote": f"{lote_posicion:.4f}",
+                "Riesgo ($)": f"${riesgo_dinero:.2f}"
+            }
+            st.session_state.ordenes_activas.append(nueva_orden)
+            st.session_state.posicion_activa = True
+            st.success("¡Orden SHORT validada y enviada a la bandeja de órdenes!")
 
 st.divider()
 
-# --- PANEL DE ÓRDENES ACTIVAS (DONDE VAN LAS ÓRDENES) ---
+# --- BANDEJA DE ÓRDENES ACTIVAS ---
 st.subheader("📋 Bandeja de Órdenes Activas en el Mercado")
 
 if st.session_state.ordenes_activas:
@@ -120,19 +152,19 @@ if st.session_state.ordenes_activas:
     
     col_acc1, col_acc2 = st.columns(2)
     with col_acc1:
-        if st.button("✅ Cerrar y Pasar Orden a Bitácora (Cierre con Éxito / TP)"):
+        if st.button("✅ Cerrar con Éxito (TP Tocado)"):
             orden_cerrada = st.session_state.ordenes_activas.pop(0)
-            pnl_cierre = round(ganancia_proyectada * random.choice([0.8, 1.0]), 2)
+            pnl_cierre = round(ganancia_proyectada, 2)
             orden_cerrada["P&L ($)"] = pnl_cierre
             orden_cerrada["Estado"] = "CERRADA CON GANANCIA 🟢"
             st.session_state.bitacora.append(orden_cerrada)
             if not st.session_state.ordenes_activas:
                 st.session_state.posicion_activa = False
-            st.success("¡Orden cerrada con éxito y registrada en la bitácora!")
+            st.success("¡Orden cerrada por TP y registrada en la bitácora!")
             st.rerun()
             
     with col_acc2:
-        if st.button("❌ Cerrar por Stop Loss (Cierre en Pérdida)"):
+        if st.button("❌ Cerrar en Pérdida (SL Tocado)"):
             orden_cerrada = st.session_state.ordenes_activas.pop(0)
             pnl_cierre = -round(riesgo_dinero, 2)
             orden_cerrada["P&L ($)"] = pnl_cierre
@@ -140,10 +172,10 @@ if st.session_state.ordenes_activas:
             st.session_state.bitacora.append(orden_cerrada)
             if not st.session_state.ordenes_activas:
                 st.session_state.posicion_activa = False
-            st.warning("¡Orden cerrada por Stop Loss y registrada en la bitácora!")
+            st.warning("¡Orden cerrada por SL y registrada en la bitácora!")
             st.rerun()
 else:
-    st.info("No hay órdenes activas en este momento. Ejecuta una compra o venta arriba para verla aquí.")
+    st.info("No hay órdenes activas. Ejecuta una operación arriba para gestionarla aquí.")
 
 st.divider()
 
@@ -162,7 +194,7 @@ if st.session_state.bitacora:
         col_p2.metric("Operaciones Ganadoras", f"{ganadas}")
         col_p3.metric("Operaciones Perdedoras", f"{perdidas}")
 else:
-    st.info("El balance P&L se actualizará cuando cierres tus órdenes activas.")
+    st.info("El balance P&L se actualizará cuando cierres tus órdenes.")
 
 st.divider()
 
