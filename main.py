@@ -2,11 +2,10 @@ import streamlit as st
 import streamlit.components.v1 as components
 import requests
 
-st.set_page_config(page_title="Wilfer Trading Terminal - Gráfico Técnico Avanzado", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Wilfer Trading Terminal", layout="wide", page_icon="⚡")
 
-st.title("⚡ WILFER TRADING TERMINAL - ESTACIÓN TÁCTICA PURA")
+st.title("⚡ WILFER TRADING TERMINAL - GRÁFICO LIMPIO")
 
-# --- SELECTOR DE ACTIVO Y PRECIO EN VIVO (BINANCE) ---
 col_sup1, col_sup2 = st.columns([1, 3])
 with col_sup1:
     activo_sel = st.selectbox("Símbolo del Activo", ["BTCUSDT", "ETHUSDT"])
@@ -27,9 +26,9 @@ with col_sup2:
 
 st.divider()
 
-# --- GRÁFICO TÉCNICO AVANZADO CON INDICADORES Y ESTRUCTURA INCORPORADA ---
 ticker_tv = f"BINANCE:{activo_sel}"
 
+# Gráfico limpio solo con Bandas de Bollinger y Medias Móviles
 widget_tv = f"""
 <div style="height:750px;width:100%">
   <div id="tv_chart" style="height:750px;width:100%"></div>
@@ -49,8 +48,7 @@ widget_tv = f"""
     "container_id": "tv_chart",
     "studies": [
       "BB@tv-basicstudies",
-      "MASimple@tv-basicstudies",
-      "PivotPointsStandard@tv-basicstudies"
+      "MASimple@tv-basicstudies"
     ]
   }});
   </script>
