@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import urllib.parse
 import pandas as pd
-import random
+import numpy as np
 
 st.set_page_config(page_title="Wilfer Trading Suite - Terminal Pro", layout="wide", page_icon="⚡")
 
@@ -11,47 +11,73 @@ if "bitacora" not in st.session_state:
     st.session_state.bitacora = []
 if "ordenes_activas" not in st.session_state:
     st.session_state.ordenes_activas = []
-if "posicion_activa" not in st.session_state:
-    st.session_state.posicion_activa = False
 
-st.title("⚡ WILFER TRADING SUITE - TERMINAL PRO DE EJECUCIÓN")
+st.title("⚡ WILFER TRADING SUITE - TERMINAL TÁCTICA AVANZADA")
 
-# --- PANEL DE CONFIGURACIÓN Y GESTIÓN DE CUENTA ---
+# --- BARRA LATERAL: GESTIÓN DE CUENTA ---
 st.sidebar.header("⚙️ Configuración del Trader")
-capital = st.sidebar.number_input("Capital Total de la Cuenta ($)", value=10000.0, step=500.0, format="%.2f")
+capital = st.sidebar.number_input("Capital Total ($)", value=10000.0, step=500.0, format="%.2f")
 riesgo_usr_pct = st.sidebar.slider("Riesgo por Operación (%)", min_value=0.1, max_value=5.0, value=2.0, step=0.1)
 
 st.sidebar.divider()
 st.sidebar.markdown("### 🛡️ Estado del Sistema")
 if st.session_state.ordenes_activas:
-    st.sidebar.error(f"🔴 ESTADO: {len(st.session_state.ordenes_activas)} Orden(es) Activa(s)")
+    st.sidebar.error(f"🔴 {len(st.session_state.ordenes_activas)} Orden(es) Activa(s)")
 else:
-    st.sidebar.success("🟢 ESTADO: Sistema Libre de Riesgo")
+    st.sidebar.success("🟢 Sistema Libre de Riesgo")
 
-st.subheader("🌐 Selección de Activo y Mercado")
+# --- SELECCIÓN DE ACTIVO ---
+st.subheader("🌐 Selección de Activo y Lectura Técnica")
 activo_sel = st.selectbox("Símbolo del Activo", ["BTCUSD", "ETHUSD", "EURUSD"])
 
-# --- SINCRONIZACIÓN AUTOMÁTICA SEGÚN EL GRÁFICO SELECCIONADO ---
+# Precios base y simulación técnica de Bandas de Bollinger y Fibonacci
 if activo_sel == "BTCUSD":
-    precio_default, sl_default, tp_default = 67000.00, 66500.00, 68250.00
+    precio_base, sl_base, tp_base = 67000.00, 66500.00, 68250.00
+    # Simulación de Bandas de Bollinger dinámicas
+    upper_bb, lower_bb, sma_bb = 68000.00, 66000.00, 67000.00
 elif activo_sel == "ETHUSD":
-    precio_default, sl_default, tp_default = 3500.00, 3450.00, 3620.00
+    precio_base, sl_base, tp_base = 3500.00, 3450.00, 3620.00
+    upper_bb, lower_bb, sma_bb = 3580.00, 3420.00, 3500.00
 else:  # EURUSD
-    precio_default, sl_default, tp_default = 1.0850, 1.0810, 1.0930
+    precio_base, sl_base, tp_base = 1.0850, 1.0810, 1.0930
+    upper_bb, lower_bb, sma_bb = 1.0900, 1.0800, 1.0850
 
 tipo_operacion = st.radio("Dirección Táctica", ["LONG (Compra Alcista)", "SHORT (Venta Bajista)"], horizontal=True)
 
 st.divider()
-st.subheader(f"📐 Niveles Sincronizados con el Gráfico de {activo_sel}")
 
-col_e1, col_e2 = st.columns(2)
+# --- PANEL DE NIVELES Y FIBONACCI AUTOMÁTICO ---
+st.subheader(f"📐 Niveles de Precisión y Fibonacci para {activo_sel}")
+
+col_e1, col_e2, col_e3 = st.columns(3)
 with col_e1:
-    precio_manual = st.number_input("Precio de Entrada ($)", value=precio_default, step=0.0001 if activo_sel=="EURUSD" else 1.0, format="%.4f" if activo_sel=="EURUSD" else "%.2f")
-    sl_manual = st.number_input("Stop Loss - SL ($)", value=sl_default, step=0.0001 if activo_sel=="EURUSD" else 1.0, format="%.4f" if activo_sel=="EURUSD" else "%.2f")
+    precio_manual = st.number_input("Precio de Entrada ($)", value=precio_base, step=0.0001 if activo_sel=="EURUSD" else 1.0, format="%.4f" if activo_sel=="EURUSD" else "%.2f")
 with col_e2:
-    tp_manual = st.number_input("Take Profit - TP ($)", value=tp_default, step=0.0001 if activo_sel=="EURUSD" else 1.0, format="%.4f" if activo_sel=="EURUSD" else "%.2f")
+    sl_manual = st.number_input("Stop Loss - SL ($)", value=sl_base, step=0.0001 if activo_sel=="EURUSD" else 1.0, format="%.4f" if activo_sel=="EURUSD" else "%.2f")
+with col_e3:
+    # Cálculo automático de Fibonacci (Proyección de niveles 0.618 y 1.618 basados en el riesgo)
+    rango_fib = abs(precio_manual - sl_manual)
+    tp_fib_sugerido = precio_manual + (rango_fib * 1.618) if "LONG" in tipo_operacion else precio_manual - (rango_fib * 1.618)
+    
+    tp_manual = st.number_input("Take Profit - TP (Fib 1.618)", value=tp_fib_sugerido, step=0.0001 if activo_sel=="EURUSD" else 1.0, format="%.4f" if activo_sel=="EURUSD" else "%.2f")
 
-# Cálculos matemáticos avanzados del motor
+# --- LECTURA TÉCNICA DE BANDAS DE BOLLINGER ---
+st.markdown("##### 📊 Lectura de Bandas de Bollinger y Estado del Mercado:")
+col_b1, col_b2, col_b3 = st.columns(3)
+col_b1.metric("Banda Superior (Resistencia)", f"{upper_bb:,.2f}" if activo_sel!="EURUSD" else f"{upper_bb:,.4f}")
+col_b2.metric("Media Móvil Central (SMA)", f"{sma_bb:,.2f}" if activo_sel!="EURUSD" else f"{sma_bb:,.4f}")
+col_b3.metric("Banda Inferior (Soporte)", f"{lower_bb:,.2f}" if activo_sel!="EURUSD" else f"{lower_bb:,.4f}")
+
+if precio_manual >= upper_bb:
+    st.warning("⚠️ Alerta Bollinger: El precio está tocando la Banda Superior (Zona de Posible Sobrecompra). Cuidado con los LONGs.")
+elif precio_manual <= lower_bb:
+    st.info("💡 Alerta Bollinger: El precio está tocando la Banda Inferior (Zona de Posible Sobreventa). Oportunidad para LONGs.")
+else:
+    st.success("✅ Estado Bollinger: El precio opera neutral dentro del canal central.")
+
+st.divider()
+
+# --- CÁLCULOS MATEMÁTICOS DE RIESGO ---
 riesgo_dinero = capital * (riesgo_usr_pct / 100.0)
 riesgo_unitario = abs(precio_manual - sl_manual)
 lote_posicion = riesgo_dinero / riesgo_unitario if riesgo_unitario > 0 else 0.0
@@ -63,27 +89,22 @@ else:
     ganancia_proyectada = lote_posicion * abs(precio_manual - tp_manual)
     rr_actual = abs(precio_manual - tp_manual) / riesgo_unitario if riesgo_unitario > 0 else 0.0
 
-st.divider()
-
 # --- PANEL DE CONTROL Y MÉTRICAS CLAVE ---
-st.subheader("🎯 Panel de Control y Métricas")
+st.subheader("🎯 Panel de Control y Métricas de Riesgo")
 
 col_n1, col_n2, col_n3 = st.columns(3)
 col_n1.metric("Puntos de Riesgo (SL)", f"{riesgo_unitario:,.4f}" if activo_sel=="EURUSD" else f"{riesgo_unitario:,.2f} USD")
 col_n2.metric("Ratio Beneficio/Riesgo (R:R)", f"1 : {rr_actual:.2f}")
 col_n3.metric("Ganancia Proyectada (TP)", f"${ganancia_proyectada:,.2f} USD")
 
-st.markdown("---")
-
 m1, m2 = st.columns(2)
 m1.metric("Riesgo Máximo en Dinero", f"${riesgo_dinero:,.2f} USD")
-m2.metric("Lote / Tamaño de Posición Exacto", f"{lote_posicion:.4f} unidades")
+m2.metric("Tamaño de Lote Exacto", f"{lote_posicion:.4f} unidades")
 
 st.divider()
 
-# --- BOTONES DE EJECUCIÓN INTERACTIVA EN LA TERMINAL ---
-st.subheader("🚀 Terminal de Disparo y Órdenes")
-
+# --- BOTONES DE EJECUCIÓN ---
+st.subheader("🚀 Terminal de Disparo")
 col_btn1, col_btn2 = st.columns(2)
 
 with col_btn1:
@@ -99,8 +120,7 @@ with col_btn1:
             "Riesgo ($)": f"${riesgo_dinero:.2f}"
         }
         st.session_state.ordenes_activas.append(nueva_orden)
-        st.session_state.posicion_activa = True
-        st.success("¡Orden LONG sincronizada y enviada a la bandeja!")
+        st.success("¡Orden LONG ejecutada y enviada a la bandeja!")
 
 with col_btn2:
     if st.button("🔴 EJECUTAR VENTA (SHORT)", use_container_width=True, type="primary"):
@@ -115,92 +135,40 @@ with col_btn2:
             "Riesgo ($)": f"${riesgo_dinero:.2f}"
         }
         st.session_state.ordenes_activas.append(nueva_orden)
-        st.session_state.posicion_activa = True
-        st.success("¡Orden SHORT sincronizada y enviada a la bandeja!")
+        st.success("¡Orden SHORT ejecutada y enviada a la bandeja!")
 
 st.divider()
 
-# --- BANDEJA DE ÓRDENES ACTIVAS ---
-st.subheader("📋 Bandeja de Órdenes Activas en el Mercado")
+# --- BANDEJA DE ÓRDENES Y GESTIÓN ---
+st.subheader("📋 Bandeja de Órdenes Activas")
 
 if st.session_state.ordenes_activas:
-    df_ordenes = pd.DataFrame(st.session_state.ordenes_activas)
-    st.dataframe(df_ordenes, use_container_width=True)
+    st.dataframe(pd.DataFrame(st.session_state.ordenes_activas), use_container_width=True)
     
     col_acc1, col_acc2 = st.columns(2)
     with col_acc1:
         if st.button("✅ Cerrar con Éxito (TP Tocado)"):
             orden_cerrada = st.session_state.ordenes_activas.pop(0)
-            pnl_cierre = round(ganancia_proyectada, 2)
-            orden_cerrada["P&L ($)"] = pnl_cierre
+            orden_cerrada["P&L ($)"] = round(ganancia_proyectada, 2)
             orden_cerrada["Estado"] = "CERRADA CON GANANCIA 🟢"
             st.session_state.bitacora.append(orden_cerrada)
-            if not st.session_state.ordenes_activas:
-                st.session_state.posicion_activa = False
             st.success("¡Orden cerrada por TP y registrada en la bitácora!")
             st.rerun()
             
     with col_acc2:
         if st.button("❌ Cerrar en Pérdida (SL Tocado)"):
             orden_cerrada = st.session_state.ordenes_activas.pop(0)
-            pnl_cierre = -round(riesgo_dinero, 2)
-            orden_cerrada["P&L ($)"] = pnl_cierre
+            orden_cerrada["P&L ($)"] = -round(riesgo_dinero, 2)
             orden_cerrada["Estado"] = "CERRADA EN SL 🔴"
             st.session_state.bitacora.append(orden_cerrada)
-            if not st.session_state.ordenes_activas:
-                st.session_state.posicion_activa = False
             st.warning("¡Orden cerrada por SL y registrada en la bitácora!")
             st.rerun()
 else:
-    st.info("No hay órdenes activas. Ejecuta una operación para gestionarla aquí.")
+    st.info("No hay órdenes activas en este momento.")
 
 st.divider()
 
-# --- PANEL DE GANANCIAS Y PÉRDIDAS (P&L ACUMULADO) ---
-st.subheader("📊 Panel de Ganancias y Pérdidas (P&L Acumulado)")
-
-if st.session_state.bitacora:
-    df_bitacora = pd.DataFrame(st.session_state.bitacora)
-    if "P&L ($)" in df_bitacora.columns:
-        pnl_total = df_bitacora["P&L ($)"].sum()
-        ganadas = len(df_bitacora[df_bitacora["P&L ($)"] > 0])
-        perdidas = len(df_bitacora[df_bitacora["P&L ($)"] < 0])
-        
-        col_p1, col_p2, col_p3 = st.columns(3)
-        col_p1.metric("P&L Total Acumulado", f"${pnl_total:,.2f} USD")
-        col_p2.metric("Operaciones Ganadoras", f"{ganadas}")
-        col_p3.metric("Operaciones Perdedoras", f"{perdidas}")
-else:
-    st.info("El balance P&L se actualizará cuando cierres tus órdenes.")
-
-st.divider()
-
-# Botones de compartir señal por WhatsApp y Telegram
-mensaje_senal = (
-    f"🚨 *WILFER TRADING SUITE - SEÑAL TERMINAL* 🚨\n\n"
-    f"📌 *Símbolo:* {activo_sel}\n"
-    f"📈 *Dirección:* {tipo_operacion}\n"
-    f"🎯 *Entrada:* {precio_manual}\n"
-    f"🛑 *Stop Loss:* {sl_manual}\n"
-    f"🏆 *Take Profit:* {tp_manual}\n"
-    f"💵 *Riesgo Máximo:* ${riesgo_dinero:,.2f} USD\n"
-    f"⚖️ *Lote / Posición:* {lote_posicion:.4f} unidades\n"
-    f"📊 *R:R:* 1:{rr_actual:.2f}"
-)
-msg_encoded = urllib.parse.quote(mensaje_senal)
-link_wa = f"https://api.whatsapp.com/send?text={msg_encoded}"
-link_tg = f"https://t.me/share/url?url=&text={msg_encoded}"
-
-st.markdown("##### 📲 Compartir Señal Operativa:")
-col_w, col_t = st.columns(2)
-with col_w:
-    st.markdown(f'<a href="{link_wa}" target="_blank" style="text-decoration:none;"><button style="width:100%;background-color:#25D366;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">📲 WhatsApp</button></a>', unsafe_allow_html=True)
-with col_t:
-    st.markdown(f'<a href="{link_tg}" target="_blank" style="text-decoration:none;"><button style="width:100%;background-color:#0088cc;color:white;border:none;padding:12px;border-radius:6px;font-weight:bold;cursor:pointer;">✈️ Telegram</button></a>', unsafe_allow_html=True)
-
-st.divider()
-
-# --- GRÁFICO TRADINGVIEW EN VIVO (INTACTO) ---
+# --- GRÁFICO TRADINGVIEW EN VIVO SINCRONIZADO ---
 st.subheader(f"📈 Gráfico Profesional en Vivo: {activo_sel}")
 ticker_tv = f"BINANCE:{activo_sel}T" if activo_sel in ["BTCUSD", "ETHUSD"] else f"FOREXCOM:{activo_sel}"
 
@@ -229,12 +197,12 @@ components.html(widget_tv, height=510)
 
 st.divider()
 
-# --- BITÁCORA GENERAL DE HISTORIAL ---
-st.subheader("📖 Bitácora General (Historial de Operaciones Cerradas)")
+# --- BITÁCORA GENERAL ---
+st.subheader("📖 Bitácora General (Historial de Operaciones)")
 if st.session_state.bitacora:
     st.dataframe(pd.DataFrame(st.session_state.bitacora), use_container_width=True)
-    if st.button("🗑️ Limpiar Historial de Bitácora"):
+    if st.button("🗑️ Limpiar Bitácora"):
         st.session_state.bitacora = []
         st.rerun()
 else:
-    st.info("No hay operaciones cerradas registradas en la bitácora todavía.")
+    st.info("Aún no hay operaciones registradas en el historial.")
