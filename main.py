@@ -1,17 +1,15 @@
 import streamlit as st
-import streamlit.components.v1 as components
-import urllib.parse
 import pandas as pd
 import requests
 
-st.set_page_config(page_title="Wilfer Trading Suite - Terminal Real", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Wilfer Trading Suite - Terminal Pura", layout="wide", page_icon="⚡")
 
 if "bitacora" not in st.session_state:
     st.session_state.bitacora = []
 if "ordenes_activas" not in st.session_state:
     st.session_state.ordenes_activas = []
 
-st.title("⚡ WILFER TRADING SUITE - TERMINAL CONECTADA EN VIVO")
+st.title("⚡ WILFER TRADING SUITE - TERMINAL PURA Y DE EJECUCIÓN")
 
 st.sidebar.header("⚙️ Configuración del Trader")
 capital = st.sidebar.number_input("Capital Total ($)", value=10000.0, step=500.0, format="%.2f")
@@ -20,7 +18,6 @@ riesgo_usr_pct = st.sidebar.slider("Riesgo por Operación (%)", min_value=0.1, m
 st.subheader("🌐 Selección de Activo y Precio Real")
 activo_sel = st.selectbox("Símbolo del Activo", ["BTCUSDT", "ETHUSDT"])
 
-# --- FUNCIÓN DE CONEXIÓN REAL A LA API DE BINANCE ---
 def obtener_precio_binance(symbol):
     try:
         url = f"https://data.binance.com/api/v3/ticker/price?symbol={symbol}"
@@ -28,7 +25,7 @@ def obtener_precio_binance(symbol):
         if response.status_code == 200:
             return float(response.json()["price"])
     except:
-            pass
+        pass
     return 67000.00 if "BTC" in symbol else 3500.00
 
 precio_en_vivo = obtener_precio_binance(activo_sel)
@@ -49,7 +46,6 @@ with col_e3:
     tp_sugerido = precio_manual * 1.02 if "LONG" in tipo_operacion else precio_manual * 0.98
     tp_manual = st.number_input("Take Profit - TP ($)", value=tp_sugerido, step=1.0, format="%.2f")
 
-# Cálculos de riesgo
 riesgo_dinero = capital * (riesgo_usr_pct / 100.0)
 riesgo_unitario = abs(precio_manual - sl_manual)
 lote_posicion = riesgo_dinero / riesgo_unitario if riesgo_unitario > 0 else 0.0
