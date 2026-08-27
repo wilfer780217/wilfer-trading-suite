@@ -4,7 +4,7 @@ import urllib.parse
 import pandas as pd
 import random
 
-st.set_page_config(page_title="Wilfer Trading Suite - Terminal Pro Auditada", layout="wide", page_icon="⚡")
+st.set_page_config(page_title="Wilfer Trading Suite - Terminal Pro", layout="wide", page_icon="⚡")
 
 # Inicializar estados de sesión
 if "bitacora" not in st.session_state:
@@ -14,16 +14,15 @@ if "ordenes_activas" not in st.session_state:
 if "posicion_activa" not in st.session_state:
     st.session_state.posicion_activa = False
 
-st.title("⚡ WILFER TRADING SUITE - TERMINAL PRO (AUDITADA & BLINDADA)")
+st.title("⚡ WILFER TRADING SUITE - TERMINAL PRO DE EJECUCIÓN")
 
 # --- PANEL DE CONFIGURACIÓN Y GESTIÓN DE CUENTA ---
 st.sidebar.header("⚙️ Configuración del Trader")
 capital = st.sidebar.number_input("Capital Total de la Cuenta ($)", value=10000.0, step=500.0, format="%.2f")
 riesgo_usr_pct = st.sidebar.slider("Riesgo por Operación (%)", min_value=0.1, max_value=5.0, value=2.0, step=0.1)
-apalancamiento = st.sidebar.selectbox("Apalancamiento del Broker", [1, 5, 10, 20, 50, 100], index=3)
 
 st.sidebar.divider()
-st.sidebar.markdown("### 🛡️ Estado del Sistema de Auditoría")
+st.sidebar.markdown("### 🛡️ Estado del Sistema")
 if st.session_state.ordenes_activas:
     st.sidebar.error(f"🔴 ESTADO: {len(st.session_state.ordenes_activas)} Orden(es) Activa(s)")
 else:
@@ -31,46 +30,31 @@ else:
 
 st.subheader("🌐 Selección de Activo y Mercado")
 activo_sel = st.selectbox("Símbolo del Activo", ["BTCUSD", "ETHUSD", "EURUSD"])
+
+# --- SINCRONIZACIÓN AUTOMÁTICA SEGÚN EL GRÁFICO SELECCIONADO ---
+if activo_sel == "BTCUSD":
+    precio_default, sl_default, tp_default = 67000.00, 66500.00, 68250.00
+elif activo_sel == "ETHUSD":
+    precio_default, sl_default, tp_default = 3500.00, 3450.00, 3620.00
+else:  # EURUSD
+    precio_default, sl_default, tp_default = 1.0850, 1.0810, 1.0930
+
 tipo_operacion = st.radio("Dirección Táctica", ["LONG (Compra Alcista)", "SHORT (Venta Bajista)"], horizontal=True)
 
 st.divider()
-st.subheader("📐 Planificación y Niveles de Precisión")
+st.subheader(f"📐 Niveles Sincronizados con el Gráfico de {activo_sel}")
 
 col_e1, col_e2 = st.columns(2)
 with col_e1:
-    precio_manual = st.number_input("Precio de Entrada ($)", value=67000.00, step=1.0, format="%.2f")
-    sl_manual = st.number_input("Stop Loss - SL ($)", value=66500.00, step=1.0, format="%.2f")
+    precio_manual = st.number_input("Precio de Entrada ($)", value=precio_default, step=0.0001 if activo_sel=="EURUSD" else 1.0, format="%.4f" if activo_sel=="EURUSD" else "%.2f")
+    sl_manual = st.number_input("Stop Loss - SL ($)", value=sl_default, step=0.0001 if activo_sel=="EURUSD" else 1.0, format="%.4f" if activo_sel=="EURUSD" else "%.2f")
 with col_e2:
-    tp_manual = st.number_input("Take Profit - TP ($)", value=68250.00, step=1.0, format="%.2f")
-
-# --- ESCUDO DE VALIDACIÓN DE ERRORES (AUDITORÍA LÓGICA) ---
-error_logica = False
-mensaje_error = ""
-
-if "LONG" in tipo_operacion:
-    if sl_manual >= precio_manual:
-        error_logica = True
-        mensaje_error = "⚠️ ERROR DE AUDITORÍA: En un LONG, el Stop Loss debe estar por DEBAJO del Precio de Entrada."
-    if tp_manual <= precio_manual:
-        error_logica = True
-        mensaje_error = "⚠️ ERROR DE AUDITORÍA: En un LONG, el Take Profit debe estar por ENCIMA del Precio de Entrada."
-else:  # SHORT
-    if sl_manual <= precio_manual:
-        error_logica = True
-        mensaje_error = "⚠️ ERROR DE AUDITORÍA: En un SHORT, el Stop Loss debe estar por ENCIMA del Precio de Entrada."
-    if tp_manual >= precio_manual:
-        error_logica = True
-        mensaje_error = "⚠️ ERROR DE AUDITORÍA: En un SHORT, el Take Profit debe estar por DEBAJO del Precio de Entrada."
-
-if error_logica:
-    st.error(mensaje_error)
+    tp_manual = st.number_input("Take Profit - TP ($)", value=tp_default, step=0.0001 if activo_sel=="EURUSD" else 1.0, format="%.4f" if activo_sel=="EURUSD" else "%.2f")
 
 # Cálculos matemáticos avanzados del motor
 riesgo_dinero = capital * (riesgo_usr_pct / 100.0)
 riesgo_unitario = abs(precio_manual - sl_manual)
 lote_posicion = riesgo_dinero / riesgo_unitario if riesgo_unitario > 0 else 0.0
-valor_nocional = lote_posicion * precio_manual
-margen_requerido = valor_nocional / apalancamiento
 
 if "LONG" in tipo_operacion:
     ganancia_proyectada = lote_posicion * abs(tp_manual - precio_manual)
@@ -82,64 +66,57 @@ else:
 st.divider()
 
 # --- PANEL DE CONTROL Y MÉTRICAS CLAVE ---
-st.subheader("🎯 Panel de Control y Auditoría de Riesgo")
+st.subheader("🎯 Panel de Control y Métricas")
 
 col_n1, col_n2, col_n3 = st.columns(3)
-col_n1.metric("Puntos de Riesgo (SL)", f"{riesgo_unitario:,.2f} USD")
+col_n1.metric("Puntos de Riesgo (SL)", f"{riesgo_unitario:,.4f}" if activo_sel=="EURUSD" else f"{riesgo_unitario:,.2f} USD")
 col_n2.metric("Ratio Beneficio/Riesgo (R:R)", f"1 : {rr_actual:.2f}")
 col_n3.metric("Ganancia Proyectada (TP)", f"${ganancia_proyectada:,.2f} USD")
 
 st.markdown("---")
 
-m1, m2, m3 = st.columns(3)
+m1, m2 = st.columns(2)
 m1.metric("Riesgo Máximo en Dinero", f"${riesgo_dinero:,.2f} USD")
-m2.metric("Lote / Tamaño de Posición", f"{lote_posicion:.4f} unidades")
-m3.metric("Margen Requerido (Ap. x{apalancamiento})", f"${margen_requerido:,.2f} USD")
+m2.metric("Lote / Tamaño de Posición Exacto", f"{lote_posicion:.4f} unidades")
 
 st.divider()
 
-# --- BOTONES DE EJECUCIÓN INTERACTIVA BLINDADOS ---
+# --- BOTONES DE EJECUCIÓN INTERACTIVA EN LA TERMINAL ---
 st.subheader("🚀 Terminal de Disparo y Órdenes")
 
 col_btn1, col_btn2 = st.columns(2)
 
 with col_btn1:
     if st.button("🟢 EJECUTAR COMPRA (LONG)", use_container_width=True, type="primary"):
-        if error_logica:
-            st.error("No se puede ejecutar la orden: corrige los errores lógicos de SL o TP primero.")
-        else:
-            nueva_orden = {
-                "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
-                "Símbolo": activo_sel,
-                "Tipo": "LONG",
-                "Entrada": f"{precio_manual:.2f}",
-                "SL": f"{sl_manual:.2f}",
-                "TP": f"{tp_manual:.2f}",
-                "Lote": f"{lote_posicion:.4f}",
-                "Riesgo ($)": f"${riesgo_dinero:.2f}"
-            }
-            st.session_state.ordenes_activas.append(nueva_orden)
-            st.session_state.posicion_activa = True
-            st.success("¡Orden LONG validada y enviada a la bandeja de órdenes!")
+        nueva_orden = {
+            "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
+            "Símbolo": activo_sel,
+            "Tipo": "LONG",
+            "Entrada": f"{precio_manual:.4f}" if activo_sel=="EURUSD" else f"{precio_manual:.2f}",
+            "SL": f"{sl_manual:.4f}" if activo_sel=="EURUSD" else f"{sl_manual:.2f}",
+            "TP": f"{tp_manual:.4f}" if activo_sel=="EURUSD" else f"{tp_manual:.2f}",
+            "Lote": f"{lote_posicion:.4f}",
+            "Riesgo ($)": f"${riesgo_dinero:.2f}"
+        }
+        st.session_state.ordenes_activas.append(nueva_orden)
+        st.session_state.posicion_activa = True
+        st.success("¡Orden LONG sincronizada y enviada a la bandeja!")
 
 with col_btn2:
     if st.button("🔴 EJECUTAR VENTA (SHORT)", use_container_width=True, type="primary"):
-        if error_logica:
-            st.error("No se puede ejecutar la orden: corrige los errores lógicos de SL o TP primero.")
-        else:
-            nueva_orden = {
-                "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
-                "Símbolo": activo_sel,
-                "Tipo": "SHORT",
-                "Entrada": f"{precio_manual:.2f}",
-                "SL": f"{sl_manual:.2f}",
-                "TP": f"{tp_manual:.2f}",
-                "Lote": f"{lote_posicion:.4f}",
-                "Riesgo ($)": f"${riesgo_dinero:.2f}"
-            }
-            st.session_state.ordenes_activas.append(nueva_orden)
-            st.session_state.posicion_activa = True
-            st.success("¡Orden SHORT validada y enviada a la bandeja de órdenes!")
+        nueva_orden = {
+            "ID": len(st.session_state.ordenes_activas) + len(st.session_state.bitacora) + 1,
+            "Símbolo": activo_sel,
+            "Tipo": "SHORT",
+            "Entrada": f"{precio_manual:.4f}" if activo_sel=="EURUSD" else f"{precio_manual:.2f}",
+            "SL": f"{sl_manual:.4f}" if activo_sel=="EURUSD" else f"{sl_manual:.2f}",
+            "TP": f"{tp_manual:.4f}" if activo_sel=="EURUSD" else f"{tp_manual:.2f}",
+            "Lote": f"{lote_posicion:.4f}",
+            "Riesgo ($)": f"${riesgo_dinero:.2f}"
+        }
+        st.session_state.ordenes_activas.append(nueva_orden)
+        st.session_state.posicion_activa = True
+        st.success("¡Orden SHORT sincronizada y enviada a la bandeja!")
 
 st.divider()
 
@@ -175,7 +152,7 @@ if st.session_state.ordenes_activas:
             st.warning("¡Orden cerrada por SL y registrada en la bitácora!")
             st.rerun()
 else:
-    st.info("No hay órdenes activas. Ejecuta una operación arriba para gestionarla aquí.")
+    st.info("No hay órdenes activas. Ejecuta una operación para gestionarla aquí.")
 
 st.divider()
 
@@ -203,9 +180,9 @@ mensaje_senal = (
     f"🚨 *WILFER TRADING SUITE - SEÑAL TERMINAL* 🚨\n\n"
     f"📌 *Símbolo:* {activo_sel}\n"
     f"📈 *Dirección:* {tipo_operacion}\n"
-    f"🎯 *Entrada:* {precio_manual:,.2f}\n"
-    f"🛑 *Stop Loss:* {sl_manual:,.2f}\n"
-    f"🏆 *Take Profit:* {tp_manual:,.2f}\n"
+    f"🎯 *Entrada:* {precio_manual}\n"
+    f"🛑 *Stop Loss:* {sl_manual}\n"
+    f"🏆 *Take Profit:* {tp_manual}\n"
     f"💵 *Riesgo Máximo:* ${riesgo_dinero:,.2f} USD\n"
     f"⚖️ *Lote / Posición:* {lote_posicion:.4f} unidades\n"
     f"📊 *R:R:* 1:{rr_actual:.2f}"
@@ -223,7 +200,7 @@ with col_t:
 
 st.divider()
 
-# --- GRÁFICO TRADINGVIEW EN VIVO ---
+# --- GRÁFICO TRADINGVIEW EN VIVO (INTACTO) ---
 st.subheader(f"📈 Gráfico Profesional en Vivo: {activo_sel}")
 ticker_tv = f"BINANCE:{activo_sel}T" if activo_sel in ["BTCUSD", "ETHUSD"] else f"FOREXCOM:{activo_sel}"
 
